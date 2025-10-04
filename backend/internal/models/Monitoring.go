@@ -4,7 +4,7 @@ import "time"
 
 // Monitoring merepresentasikan satu baris di tabel 'monitoring'
 type Monitoring struct {
-	ID uint `gorm:"primaryKey"`
+	RemoteID uint `gorm:"primaryKey"`
 
 	// Nama Remote GDrive
 	RemoteName string `gorm:"size:100;unique;not null"`

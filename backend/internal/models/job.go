@@ -4,7 +4,7 @@ import "time"
 
 type ScheduledJob struct {
 	ID     uint   `gorm:"primaryKey"`
-	UserID uint   `gorm:"not null"` // Foreign Key ke User
+	UserID uint   `gorm:"not null"`
 	Name   string `gorm:"size:100;not null"`
 
 	// Konfigurasi Sumber
@@ -17,16 +17,16 @@ type ScheduledJob struct {
 	IsEncrypted   bool   `gorm:"default:false"`
 	EncryptionKey string `gorm:"size:255;nullable"` // Kunci Enkripsi Runtime
 
-	// Penjadwalan dan Status Queue
+	// Penjadwalan dan Status Antrian
 	Schedule    string `gorm:"size:50;not null"` // Cron Expression (Tidak NULL karena ini tabel Scheduled)
 	Priority    int    `gorm:"default:5"`
 	StatusQueue string `gorm:"type:enum('PENDING','RUNNING','COMPLETED','FAILED');default:PENDING"`
 	IsActive    bool   `gorm:"default:true"`
 
-	// Riwayat dan Timestamp
+	// Timestamp
 	LastRun *time.Time // Waktu Job terakhir kali berjalan (bisa NULL)
 
-	// Wajib ada untuk GORM
+	// Bawaan GORM
 	CreatedAt time.Time
 	UpdatedAt time.Time
 

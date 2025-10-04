@@ -7,7 +7,7 @@ type Log struct {
 	ID uint `gorm:"primaryKey"`
 
 	// Foreign Key (Pointer membuatnya nullable di MariaDB)
-	JobID   *uint
+	JobID   uint
 	JobName string
 	// Status Operasi
 	OperationType string `gorm:"type:enum('BACKUP', 'RESTORE', 'MANUAL_BACKUP');not null"`
