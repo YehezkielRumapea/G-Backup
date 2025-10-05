@@ -11,17 +11,22 @@ type LogRepository interface {
 	CreateLog(log *models.Log) error
 }
 
-type logRepositoryImpl struct {
-	log *gorm.DB
+type LogRepositoryImpl struct {
+	LogRepo *gorm.DB
+}
+
+func (r *LogRepositoryImpl) CreateLog(log *models.Log) error {
+	result := r.LogRepo.Create(log)
+	return result.Error
 }
 
 func NewLogRepository(db *gorm.DB) LogRepository {
-	return &logRepositoryImpl{DB: db}
+	return &LogRepositoryImpl{LogRepo: db}
 }
 
-func (r *logRepositoryImpl) FindAllLogs() ([]models.Log, error) {
+func (r *LogRepositoryImpl) FindAllLogs() ([]models.Log, error) {
 	var logs []models.Log
-	result := r.DB.Preload("Scheduled Job").order("timestamp desc").Find(&logs)
+	result := r.LogRepo.Preload("ScheduledJob").Order("timestamp desc").Find(&logs)
 	if result.Error != nil && result.Error != gorm.ErrRecordNotFound {
 		return nil, result.Error
 	}

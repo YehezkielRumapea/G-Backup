@@ -15,22 +15,22 @@ type JobRepository interface {
 }
 
 type JobRepositoryImpl struct {
-	DB *gorm.DB
+	JobRepo *gorm.DB
 }
 
 func NewJobRepository(db *gorm.DB) JobRepository {
-	return &JobRepositoryImpl{DB: db}
+	return &JobRepositoryImpl{JobRepo: db}
 }
 
 // Job Active untuk Schedular
 func (r *JobRepositoryImpl) Create(Job *models.ScheduledJob) error {
-	result := r.DB.Create(Job)
+	result := r.JobRepo.Create(Job)
 	return result.Error
 }
 
 func (r *JobRepositoryImpl) FindActiveJobs() ([]models.ScheduledJob, error) {
 	var jobs []models.ScheduledJob
-	result := r.DB.Where("is_Active= ? ", true).Find(&jobs)
+	result := r.JobRepo.Where("is_Active= ? ", true).Find(&jobs)
 
 	if result.Error != nil && result.Error != gorm.ErrRecordNotFound {
 		return nil, result.Error
@@ -39,7 +39,7 @@ func (r *JobRepositoryImpl) FindActiveJobs() ([]models.ScheduledJob, error) {
 }
 
 func (r *JobRepositoryImpl) UpdateLastRunStatus(JobID uint, lastRunTime time.Time, status string) error {
-	result := r.DB.Model(&models.ScheduledJob{}).Where("id =?", JobID).Updates(map[string]interface{}{
+	result := r.JobRepo.Model(&models.ScheduledJob{}).Where("id =?", JobID).Updates(map[string]interface{}{
 		"last_run_at":  lastRunTime,
 		"status_queue": status,
 	})
