@@ -2,12 +2,16 @@ package services
 
 import (
 	"fmt"
+	"gbackup-system/backend/internal/models"
 	"gbackup-system/backend/internal/repository"
 	"time"
 
 	"github.com/robfig/cron/v3"
 )
 
+type BackupService interface {
+	StartNewJob(job models.ScheduledJob)
+}
 type SchedulerService interface {
 	StartDaemon()
 	RunScheduledJob() error
@@ -15,19 +19,23 @@ type SchedulerService interface {
 }
 
 type SchedulerServiceImpl struct {
-	JobRepo repository.JobRepository
+	JobRepo    repository.JobRepository
+	BackupSync BackupService
 }
 
-func NewSchedulerService(JRepo repository.JobRepository) SchedulerService {
-	return &SchedulerServiceImpl{JobRepo: JRepo}
+func NewSchedulerService(JRepo repository.JobRepository, Bsyc BackupService) SchedulerService {
+	return &SchedulerServiceImpl{JobRepo: JRepo, BackupSync: Bsyc}
 }
 
+// Main Logic
+// Menghitung waktu run job selanjutnya
 func (s *SchedulerServiceImpl) CalculateNextRun(schedule string, lastRun time.Time) time.Time {
 	parser := cron.NewParser(
 		cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow,
 	)
 
 	sched, err := parser.Parse(schedule)
+
 	if err != nil {
 		fmt.Printf("Error, gagal parsing cron expression: %v\n", err)
 		return time.Time{}
@@ -40,6 +48,7 @@ func (s *SchedulerServiceImpl) CalculateNextRun(schedule string, lastRun time.Ti
 	return sched.Next(baseTime)
 }
 
+// Me-Run Job yang terjadwal
 func (s *SchedulerServiceImpl) RunScheduledJob() error {
 	jobs, err := s.JobRepo.FindActiveJobs()
 	if err != nil {
@@ -56,13 +65,31 @@ func (s *SchedulerServiceImpl) RunScheduledJob() error {
 		nextRun := s.CalculateNextRun(job.Schedule, lastRunTime)
 
 		if nextRun.Before(now) {
+
+			lockTime := time.Now() // Job locking
+
+			err := s.JobRepo.UpdateLastRunStatus(job.ID, lockTime, "RUNNING")
+
+			if err != nil {
+				fmt.Printf("Job %d (%s) Sudah berjalan : %v\n",
+					job.ID,
+					job.Name,
+					err)
+				continue
+			}
+
+			fmt.Printf("[Scheduler] Dispatching Job %d (%s) - Next Run: %s\n",
+				job.ID,
+				job.Name,
+				nextRun.Format(time.RFC3339))
+
+			s.BackupSync.StartNewJob(job)
 		}
 	}
-
-	fmt.Println("Cek Job Terjadawal")
 	return nil
 }
 
+// Goroutine
 func (s *SchedulerServiceImpl) StartDaemon() {
 	go func() {
 		fmt.Println("Schedular Daemon Aktif, Pengecekan Job tiap 5 menit ")

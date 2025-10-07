@@ -1,0 +1,50 @@
+package services
+
+import (
+	"encoding/json"
+	"fmt"
+	"gbackup-system/backend/internal/models"
+	"gbackup-system/backend/internal/repository"
+	"time"
+)
+
+type MonitoringRepositoryImpl struct {
+	MonitorRepo repository.MonitoringRepository
+}
+
+func (s *MonitoringRepositoryImpl) UpdateRemoteStatus(remoteName string) error {
+	rcloneArgs := []string{"About", remoteName + ":", "--json"}
+
+	result := ExecuteRcloneJob(rcloneArgs)
+
+	monitor := &models.Monitoring{
+		RemoteName:    remoteName,
+		LastCheckedAt: time.Now(),
+	}
+
+	if !result.Success {
+		monitor.StatusConnect = "Disconnected"
+		s.MonitorRepo.UpsertRemoteStatus(monitor)
+		return fmt.Errorf("Gagal Terhubung ke %s, %s", remoteName, result.ErrorMsg)
+	}
+
+	var rcloneData struct {
+		Total uint64 `json:"total"`
+		Used  uint64 `json:"used"`
+	}
+
+	if err := json.Unmarshal([]byte(result.Output), &rcloneData); err != nil {
+		return fmt.Errorf("Gagal Parsing Json Output Rclone: %v", err)
+	}
+
+	const BytesToGb = 1073741824.0 // konversi data GB ke bit
+	totalGB := float64(rcloneData.Total) / BytesToGb
+	usedGB := float64(rcloneData.Used) / BytesToGb
+
+	monitor.StatusConnect = "Connected"
+	monitor.TotalStorageGB = totalGB
+	monitor.UsedStorageGB = usedGB
+	monitor.FreeStorageGB = totalGB - usedGB
+
+	return s.MonitorRepo.UpsertRemoteStatus(monitor)
+}
