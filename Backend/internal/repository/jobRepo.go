@@ -1,7 +1,7 @@
 package repository
 
 import (
-	"gbackup-system/Backend/internal/models"
+	"gbackup-system/backend/internal/models"
 	"time"
 
 	"gorm.io/gorm"

@@ -8,12 +8,12 @@ import (
 	"time"
 )
 
-type MonitoringRepositoryImpl struct {
+type MonitoringService struct {
 	MonitorRepo repository.MonitoringRepository
 }
 
-func (s *MonitoringRepositoryImpl) UpdateRemoteStatus(remoteName string) error {
-	rcloneArgs := []string{"About", remoteName + ":", "--json"}
+func (s *MonitoringService) UpdateRemoteStatus(remoteName string) error {
+	rcloneArgs := []string{"about", remoteName + ":", "--json"}
 
 	result := ExecuteRcloneJob(rcloneArgs)
 
