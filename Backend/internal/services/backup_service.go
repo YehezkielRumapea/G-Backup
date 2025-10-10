@@ -26,18 +26,13 @@ func (s *BackupServiceImpl) buildRcloneArgs(job models.ScheduledJob, tempDumpPat
 		sourcePathRclone = tempDumpPath
 	}
 	destination := fmt.Sprintf("%s:%s", job.RemoteName, job.DestinationPath)
-	command := job.RcloneMode
-
 	// Arg Rclone
-
+	command := "copy"
+	if job.RcloneMode != "" {
+		command = job.RcloneMode
+	}
 	args := []string{command, sourcePathRclone, destination}
 	args = append(args, "--checksum")
-
-	// if job.RcloneMode == "sync" {
-	// 	fmt.Println("[ARGS] Mode Sync aktif (Overwrite)")
-	// } else {
-	// 	fmt.Println("[ARGS] Mode Copy aktif (Append)")
-	// }
 
 	if job.IsEncrypted {
 		s.injectEncrytionFlags(&args, job)
@@ -77,7 +72,8 @@ func (s *BackupServiceImpl) StartNewJob(job models.ScheduledJob) {
 			}
 		}
 
-		rcloneArgs := ExecuteRcloneJob(rcloneArgs)
+		rcloneArgs := s.buildRcloneArgs(job, tempDumpPath)
+		result := ExecuteRcloneJob(rcloneArgs)
 		s.handleJobCompletion(job, result, tempDumpPath)
 
 		fmt.Sprintf("[%d] Job %s: selesai. Status masuk ke log\n", job.ID, job.Name)
@@ -86,10 +82,10 @@ func (s *BackupServiceImpl) StartNewJob(job models.ScheduledJob) {
 
 func (s *BackupServiceImpl) executeDumpDB(job models.ScheduledJob) (string, error) {
 	tempPath := fmt.Sprintf("/tmp/db_dump_%d_%d.sql", job.ID, time.Now().Unix())
-
+	DbPass := os.Getenv("DB_PASS")
 	dumpArgs := []string{
 		fmt.Sprintf("-u%s", job.DbUser),
-		fmt.Sprintf("-p%s", job.Dbpass),
+		fmt.Sprintf("-p%s", DbPass),
 		job.SourcePath,
 		"-r", tempPath,
 	}
@@ -101,6 +97,13 @@ func (s *BackupServiceImpl) executeDumpDB(job models.ScheduledJob) (string, erro
 	}
 
 	return tempPath, nil
+}
+
+func (s *BackupServiceImpl) ExecuteRcloneJob(job models.ScheduledJob) (string, error) {
+	if job.JobType == "DB" {
+		return s.executeDumpDB(job)
+	}
+	return "", nil
 }
 
 func (s *BackupServiceImpl) handleJobCompletion(job models.ScheduledJob, result RcloneResult, tempDumpPath string) {
@@ -117,5 +120,13 @@ func (s *BackupServiceImpl) handleJobCompletion(job models.ScheduledJob, result 
 		}
 	}
 
-	newLog := &models.Log{}
+	newLog := &models.Log{
+		JobID: job.ID,
+		JobName: job.Name,
+		OperationType: job.JobType,
+		Status: logstatus,
+		Timestamp: time.Now(),
+		DurationSec: int(result.Duration.Seconds()),
+	}
+	s.LogRepo.Save(newLog)
 }

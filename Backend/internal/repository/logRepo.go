@@ -9,6 +9,7 @@ import (
 type LogRepository interface {
 	FindAllLogs() ([]models.Log, error)
 	CreateLog(log *models.Log) error
+	Save(log *models.Log) error
 }
 
 type LogRepositoryImpl struct {
@@ -31,5 +32,9 @@ func (r *LogRepositoryImpl) FindAllLogs() ([]models.Log, error) {
 		return nil, result.Error
 	}
 	return logs, nil
+}
 
+func (r *LogRepositoryImpl) Save(log *models.Log) error {
+	result := r.LogRepo.Save(log)
+	return result.Error
 }

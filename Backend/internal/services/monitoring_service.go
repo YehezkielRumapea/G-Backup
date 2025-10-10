@@ -8,11 +8,20 @@ import (
 	"time"
 )
 
-type MonitoringService struct {
+type MonitoringService interface {
+	UpdateRemoteStatus(remoteName string) error
+	GetRemoteStatusList() ([]*models.Monitoring, error)
+}
+
+type MonitoringServiceImpl struct {
 	MonitorRepo repository.MonitoringRepository
 }
 
-func (s *MonitoringService) UpdateRemoteStatus(remoteName string) error {
+func NewMonitoringService(mRepo repository.MonitoringRepository) MonitoringService {
+	return &MonitoringServiceImpl{MonitorRepo: mRepo}
+}
+
+func (s *MonitoringServiceImpl) UpdateRemoteStatus(remoteName string) error {
 	rcloneArgs := []string{"about", remoteName + ":", "--json"}
 
 	result := ExecuteRcloneJob(rcloneArgs)
@@ -47,4 +56,8 @@ func (s *MonitoringService) UpdateRemoteStatus(remoteName string) error {
 	monitor.FreeStorageGB = totalGB - usedGB
 
 	return s.MonitorRepo.UpsertRemoteStatus(monitor)
+}
+
+func (s *MonitoringServiceImpl) GetRemoteStatusList() ([]*models.Monitoring, error) {
+	return s.MonitorRepo.FindAllRemote()
 }
