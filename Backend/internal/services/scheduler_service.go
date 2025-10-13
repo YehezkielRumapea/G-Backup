@@ -19,8 +19,9 @@ type SchedulerService interface {
 }
 
 type SchedulerServiceImpl struct {
-	JobRepo    repository.JobRepository
-	BackupSync BackupService
+	JobRepo     repository.JobRepository
+	BackupSync  BackupService
+	intervalCek time.Duration
 }
 
 func NewSchedulerService(JRepo repository.JobRepository, Bsyc BackupService) SchedulerService {
@@ -52,7 +53,7 @@ func (s *SchedulerServiceImpl) CalculateNextRun(schedule string, lastRun time.Ti
 func (s *SchedulerServiceImpl) RunScheduledJob() error {
 	jobs, err := s.JobRepo.FindActiveJobs()
 	if err != nil {
-		return fmt.Errorf("Gagal mengambil job aktif dari DB: %w", err)
+		return fmt.Errorf("gagal mengambil job aktif dari DB: %w", err)
 	}
 	now := time.Now()
 
@@ -91,6 +92,9 @@ func (s *SchedulerServiceImpl) RunScheduledJob() error {
 
 // Goroutine
 func (s *SchedulerServiceImpl) StartDaemon() {
+	if s.intervalCek == 0 {
+		s.intervalCek = 5 * time.Minute
+	}
 	go func() {
 		fmt.Println("Schedular Daemon Aktif, Pengecekan Job tiap 5 menit ")
 
@@ -99,7 +103,7 @@ func (s *SchedulerServiceImpl) StartDaemon() {
 			if err != nil {
 				fmt.Printf("Daemon Error: %v\n", err)
 			}
-			time.Sleep(5 * time.Minute)
+			time.Sleep(s.intervalCek)
 		}
 	}()
 }

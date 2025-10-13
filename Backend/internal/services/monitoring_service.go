@@ -17,6 +17,12 @@ type MonitoringServiceImpl struct {
 	MonitorRepo repository.MonitoringRepository
 }
 
+const (
+	RemoteStatusConnected    = "Connected"
+	RemoteStatusDisconnected = "Disconnected"
+	BytesToGb                = 1073741824.0
+)
+
 func NewMonitoringService(mRepo repository.MonitoringRepository) MonitoringService {
 	return &MonitoringServiceImpl{MonitorRepo: mRepo}
 }
@@ -24,17 +30,26 @@ func NewMonitoringService(mRepo repository.MonitoringRepository) MonitoringServi
 func (s *MonitoringServiceImpl) UpdateRemoteStatus(remoteName string) error {
 	rcloneArgs := []string{"about", remoteName + ":", "--json"}
 
-	result := ExecuteRcloneJob(rcloneArgs)
-
 	monitor := &models.Monitoring{
 		RemoteName:    remoteName,
 		LastCheckedAt: time.Now(),
 	}
 
+	result := ExecuteRcloneJob(rcloneArgs)
+
+	if !result.Success {
+		monitor.StatusConnect = RemoteStatusConnected
+		err := s.MonitorRepo.UpsertRemoteStatus(monitor)
+		if err != nil {
+			return fmt.Errorf("gagal Update Status Remote di DB: %v", err)
+		}
+		return fmt.Errorf("gagal terhubung ke %s: %s", remoteName, result.ErrorMsg)
+	}
+
 	if !result.Success {
 		monitor.StatusConnect = "Disconnected"
 		s.MonitorRepo.UpsertRemoteStatus(monitor)
-		return fmt.Errorf("Gagal Terhubung ke %s, %s", remoteName, result.ErrorMsg)
+		return fmt.Errorf("gagal Terhubung ke %s, %s", remoteName, result.ErrorMsg)
 	}
 
 	var rcloneData struct {
@@ -43,17 +58,17 @@ func (s *MonitoringServiceImpl) UpdateRemoteStatus(remoteName string) error {
 	}
 
 	if err := json.Unmarshal([]byte(result.Output), &rcloneData); err != nil {
-		return fmt.Errorf("Gagal Parsing Json Output Rclone: %v", err)
+		return fmt.Errorf("gagal Parsing Json Output Rclone: %v", err)
 	}
-
-	const BytesToGb = 1073741824.0 // konversi data GB ke bit
+	// konversi data GB ke bit
 	totalGB := float64(rcloneData.Total) / BytesToGb
 	usedGB := float64(rcloneData.Used) / BytesToGb
+	FreeStorage := totalGB - usedGB
 
-	monitor.StatusConnect = "Connected"
+	monitor.StatusConnect = RemoteStatusConnected
 	monitor.TotalStorageGB = totalGB
 	monitor.UsedStorageGB = usedGB
-	monitor.FreeStorageGB = totalGB - usedGB
+	monitor.FreeStorageGB = FreeStorage
 
 	return s.MonitorRepo.UpsertRemoteStatus(monitor)
 }

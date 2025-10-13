@@ -76,7 +76,8 @@ func (s *BackupServiceImpl) StartNewJob(job models.ScheduledJob) {
 		result := ExecuteRcloneJob(rcloneArgs)
 		s.handleJobCompletion(job, result, tempDumpPath)
 
-		fmt.Sprintf("[%d] Job %s: selesai. Status masuk ke log\n", job.ID, job.Name)
+		pesan := fmt.Sprintf("[%d] Job %s: selesai. Status masuk ke log\n", job.ID, job.Name)
+		fmt.Println(pesan)
 	}()
 }
 
@@ -121,12 +122,12 @@ func (s *BackupServiceImpl) handleJobCompletion(job models.ScheduledJob, result 
 	}
 
 	newLog := &models.Log{
-		JobID: job.ID,
-		JobName: job.Name,
+		JobID:         job.ID,
+		JobName:       job.Name,
 		OperationType: job.JobType,
-		Status: logstatus,
-		Timestamp: time.Now(),
-		DurationSec: int(result.Duration.Seconds()),
+		Status:        logstatus,
+		Timestamp:     time.Now(),
+		DurationSec:   int(result.Duration.Seconds()),
 	}
 	s.LogRepo.Save(newLog)
 }
