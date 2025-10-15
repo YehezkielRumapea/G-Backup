@@ -7,7 +7,12 @@ require (
 	gorm.io/gorm v1.31.0
 )
 
-require github.com/golang-jwt/jwt/v5 v5.3.0
+require (
+	github.com/golang-jwt/jwt/v5 v5.3.0
+	github.com/labstack/echo-jwt/v4 v4.3.1
+)
+
+require golang.org/x/time v0.11.0 // indirect
 
 require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
