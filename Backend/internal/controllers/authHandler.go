@@ -11,7 +11,7 @@ type AuthHandler struct {
 	AuthSvc services.AuthService
 }
 
-func NewAuthHandler(e *echo.Echo, authSvc services.AuthService) *AuthHandler {
+func NewAuthHandler(authSvc services.AuthService) *AuthHandler {
 	return &AuthHandler{AuthSvc: authSvc}
 }
 
@@ -21,14 +21,14 @@ func (h *AuthHandler) Login(c echo.Context) error {
 
 	// Json to struct
 	if err := c.Bind(req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"Error": "Format Input Salah"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Format Input Salah"})
 	}
 
 	// AuthService untuk Generate Token
 	token, err := h.AuthSvc.Authenticate(req)
 
 	if err != nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"Error": "Kredensial Salah"})
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Kredensial Salah"})
 	}
 
 	// Token JWt ke frontend

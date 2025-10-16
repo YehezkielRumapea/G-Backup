@@ -11,10 +11,12 @@ import (
 type MonitoringService interface {
 	UpdateRemoteStatus(remoteName string) error
 	GetRemoteStatusList() ([]*models.Monitoring, error)
+	GetJobLogs() ([]*models.Log, error)
 }
 
 type MonitoringServiceImpl struct {
 	MonitorRepo repository.MonitoringRepository
+	LogRepo     repository.LogRepository
 }
 
 const (
@@ -23,8 +25,8 @@ const (
 	BytesToGb                = 1073741824.0
 )
 
-func NewMonitoringService(mRepo repository.MonitoringRepository) MonitoringService {
-	return &MonitoringServiceImpl{MonitorRepo: mRepo}
+func NewMonitoringService(mRepo repository.MonitoringRepository, lRepo repository.LogRepository) MonitoringService {
+	return &MonitoringServiceImpl{MonitorRepo: mRepo, LogRepo: lRepo}
 }
 
 func (s *MonitoringServiceImpl) UpdateRemoteStatus(remoteName string) error {
@@ -38,7 +40,7 @@ func (s *MonitoringServiceImpl) UpdateRemoteStatus(remoteName string) error {
 	result := ExecuteRcloneJob(rcloneArgs)
 
 	if !result.Success {
-		monitor.StatusConnect = RemoteStatusConnected
+		monitor.StatusConnect = RemoteStatusDisconnected
 		err := s.MonitorRepo.UpsertRemoteStatus(monitor)
 		if err != nil {
 			return fmt.Errorf("gagal Update Status Remote di DB: %v", err)
@@ -75,4 +77,12 @@ func (s *MonitoringServiceImpl) UpdateRemoteStatus(remoteName string) error {
 
 func (s *MonitoringServiceImpl) GetRemoteStatusList() ([]*models.Monitoring, error) {
 	return s.MonitorRepo.FindAllRemote()
+}
+
+func (s *MonitoringServiceImpl) GetJobLogs() ([]*models.Log, error) {
+	logs, err := s.MonitorRepo.FindAllLogs()
+	if err != nil {
+		return nil, fmt.Errorf("gagal mengambil log dari db: %v", err)
+	}
+	return logs, nil
 }
