@@ -42,6 +42,7 @@ func main() {
 	// 3. Injection service ke handler
 	authHandler := controllers.NewAuthHandler(authSvc)
 	monitorHandler := controllers.NewMonitoringHandler(monitorSvc)
+	jobHandler := controllers.NewJobHandler(schedulerSvc, jobRepo)
 	// Job Handler di inisialisasi disini
 
 	// 4. Seeding Admin awal
@@ -77,6 +78,9 @@ func main() {
 	// Route Monitoring
 	r.GET("/monitoring/remotes", monitorHandler.GetRemoteStatusList)
 	r.GET("/monitoring/logs", monitorHandler.GetJobLogs)
+
+	// Job Route
+	r.GET("/jobs/scheduled", jobHandler.GetScheduledJob)
 
 	// Scheduler Daemon
 	schedulerSvc.StartDaemon()

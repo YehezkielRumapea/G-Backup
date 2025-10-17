@@ -26,7 +26,10 @@ const (
 )
 
 func NewMonitoringService(mRepo repository.MonitoringRepository, lRepo repository.LogRepository) MonitoringService {
-	return &MonitoringServiceImpl{MonitorRepo: mRepo, LogRepo: lRepo}
+	return &MonitoringServiceImpl{
+		MonitorRepo: mRepo,
+		LogRepo:     lRepo,
+	}
 }
 
 func (s *MonitoringServiceImpl) UpdateRemoteStatus(remoteName string) error {

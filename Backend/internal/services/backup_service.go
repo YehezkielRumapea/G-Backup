@@ -16,7 +16,10 @@ type BackupServiceImpl struct {
 }
 
 func NewBackupService(jRepo repository.JobRepository, lRepo repository.LogRepository) BackupService {
-	return (&BackupServiceImpl{JobRepo: jRepo, LogRepo: lRepo})
+	return (&BackupServiceImpl{
+		JobRepo: jRepo,
+		LogRepo: lRepo,
+	})
 }
 
 func (s *BackupServiceImpl) buildRcloneArgs(job models.ScheduledJob, tempDumpPath string) []string {
