@@ -8,18 +8,28 @@ const showRestoreModal = ref(false);
 // --- DATA FORM UNTUK BACKUP ---
 const backupForm = ref({
   jobName: '',
-  remoteType: 'Cloud',
-  selectedRemote: '',
-  cloudPath: '/backups/website/',
-  sourcePath: 'C:/projects/my-website/',
-  backupMode: 'Append',
+  target: 'file', // 'file' atau 'database'
+  dbName: '',
+  dbUser: '',
+  dbPass: '',
+  cloudPath: '/backup-folder/data',
+  backupMode: 'auto', // 'auto' atau 'onetime'
+  scheduleType: 'hourly', // 'hourly' atau 'daily'
+  scheduleValue: 4,
+  scheduleDays: [],
+  backupOption: 'Overwrite',
+  encrypt: false,
 });
 
 // --- DATA FORM UNTUK RESTORE ---
 const restoreForm = ref({
-  selectedJob: '',
-  sourcePath: '/backups/website/2025-10-07',
-  restorePath: 'C:/restore/my-website/',
+  jobName: '',
+  target: 'file', // 'file' atau 'database'
+  sourcePath: '/backup-folder/data/file.zip',
+  destDbName: '',
+  destDbUser: '',
+  destDbPass: '',
+  restoreOption: 'Overwrite'
 });
 
 
@@ -119,50 +129,88 @@ const startRestore = () => {
     <!-- MODAL UNTUK BACKUP JOB -->
     <div v-if="showBackupModal" class="modal-overlay" @click.self="closeModal">
         <div class="modal-content">
-            <h2>Backup Job / Config</h2>
+            <div class="modal-header">
+                <h2>Backup Config</h2>
+                <button @click="closeModal" class="close-button">&times;</button>
+            </div>
             <form @submit.prevent="saveBackupJob">
                 <div class="form-group">
-                    <label for="jobName">Job Name</label>
-                    <input type="text" id="jobName" v-model="backupForm.jobName" placeholder="e.g., Daily_Website_Backup" required>
+                    <label for="jobName">Job Name*</label>
+                    <input type="text" id="jobName" v-model="backupForm.jobName" required>
                 </div>
 
                 <div class="form-group">
-                    <label>Select Remote</label>
-                    <div class="radio-group">
-                        <label><input type="radio" v-model="backupForm.remoteType" value="Cloud"> Cloud</label>
-                        <label><input type="radio" v-model="backupForm.remoteType" value="Local"> Local</label>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <select v-model="backupForm.selectedRemote" required>
-                        <option disabled value="">-- Please select a remote --</option>
-                        <option v-for="remote in remotes" :key="remote" :value="remote">{{ remote }}</option>
+                    <label for="backupTarget">Select Target</label>
+                    <select id="backupTarget" v-model="backupForm.target">
+                        <option value="file">File</option>
+                        <option value="database">Database</option>
                     </select>
+                </div>
+
+                <!-- Opsi untuk Target File -->
+                <div v-if="backupForm.target === 'file'" class="form-group">
+                    <label for="fileInput">File</label>
+                    <input type="file" id="fileInput" class="file-input">
+                </div>
+
+                <!-- Opsi untuk Target Database -->
+                <div v-if="backupForm.target === 'database'" class="db-group">
+                    <div class="form-group">
+                        <label for="dbName">DB Name</label>
+                        <input type="text" id="dbName" v-model="backupForm.dbName">
+                    </div>
+                    <div class="form-group">
+                        <label for="dbUser">DB Username</label>
+                        <input type="text" id="dbUser" v-model="backupForm.dbUser">
+                    </div>
+                     <div class="form-group">
+                        <label for="dbPass">DB Password</label>
+                        <input type="password" id="dbPass" v-model="backupForm.dbPass">
+                    </div>
                 </div>
                 
                 <div class="form-group">
                     <label for="cloudPath">Cloud Path</label>
-                    <input type="text" id="cloudPath" v-model="backupForm.cloudPath">
-                </div>
-                
-                <div class="form-group">
-                    <label for="sourcePath">Source Path</label>
-                    <input type="text" id="sourcePath" v-model="backupForm.sourcePath">
+                    <input type="text" id="cloudPath" v-model="backupForm.cloudPath" placeholder="e.g., /backup-folder/data">
                 </div>
 
                 <div class="form-group">
                     <label>Backup Mode</label>
                      <div class="radio-group">
-                        <label><input type="radio" v-model="backupForm.backupMode" value="Append"> Append</label>
-                        <label><input type="radio" v-model="backupForm.backupMode" value="Mirror"> Mirror</label>
-                        <label><input type="radio" v-model="backupForm.backupMode" value="Update"> Update</label>
+                        <label><input type="radio" v-model="backupForm.backupMode" value="auto"> Auto Backup</label>
+                        <label><input type="radio" v-model="backupForm.backupMode" value="onetime"> One Time Backup</label>
+                    </div>
+                </div>
+                
+                <!-- Opsi Skema Backup (hanya muncul jika Auto) -->
+                <div v-if="backupForm.backupMode === 'auto'" class="backup-scheme">
+                    <h3>Backup Scheme</h3>
+                     <div class="radio-group">
+                        <label><input type="radio" v-model="backupForm.scheduleType" value="hourly"> Hourly</label>
+                        <label><input type="radio" v-model="backupForm.scheduleType" value="daily"> Daily</label>
+                    </div>
+                    <div v-if="backupForm.scheduleType === 'hourly'" class="schedule-options">
+                        <span>Run every</span>
+                        <input type="number" v-model="backupForm.scheduleValue" class="hour-input">
+                        <span>hour(s)</span>
+                    </div>
+                </div>
+
+                <div class="form-group-inline">
+                    <div class="form-group">
+                        <label>Backup Options</label>
+                        <select v-model="backupForm.backupOption">
+                            <option>Overwrite</option>
+                            <option>Append</option>
+                        </select>
+                    </div>
+                    <div class="checkbox-group">
+                         <label><input type="checkbox" v-model="backupForm.encrypt"> Encrypt</label>
                     </div>
                 </div>
 
                 <div class="modal-actions">
-                    <button type="button" @click="closeModal" class="btn-secondary">Cancel</button>
-                    <button type="submit" class="btn-primary">Save Job</button>
+                    <button type="submit" class="btn-primary full-width">Start Job</button>
                 </div>
             </form>
         </div>
@@ -171,27 +219,58 @@ const startRestore = () => {
     <!-- MODAL UNTUK RESTORE JOB -->
      <div v-if="showRestoreModal" class="modal-overlay" @click.self="closeModal">
         <div class="modal-content">
-            <h2>Restore Job / Config</h2>
+             <div class="modal-header">
+                <h2>Restore Config</h2>
+                <button @click="closeModal" class="close-button">&times;</button>
+            </div>
             <form @submit.prevent="startRestore">
                  <div class="form-group">
-                    <label for="restoreJobName">Job Name</label>
-                    <select id="restoreJobName" v-model="restoreForm.selectedJob" required>
+                    <label for="restoreJobName">Job Name*</label>
+                    <select id="restoreJobName" v-model="restoreForm.jobName" required>
                         <option disabled value="">-- Select a backup job to restore --</option>
                          <option v-for="job in backupJobs" :key="job" :value="job">{{ job }}</option>
                     </select>
                 </div>
-                <div class="form-group">
-                    <label for="restoreSourcePath">Source Path (from remote)</label>
-                    <input type="text" id="restoreSourcePath" v-model="restoreForm.sourcePath">
-                </div>
                  <div class="form-group">
-                    <label for="restorePath">Restore Path (to local)</label>
-                    <input type="text" id="restorePath" v-model="restoreForm.restorePath">
+                    <label for="restoreTarget">Select Target</label>
+                    <select id="restoreTarget" v-model="restoreForm.target">
+                        <option value="file">File</option>
+                        <option value="database">Database</option>
+                    </select>
+                </div>
+
+                <!-- Opsi untuk Restore File -->
+                 <div v-if="restoreForm.target === 'file'" class="form-group">
+                    <label for="restoreSourcePath">Restore From Path</label>
+                    <input type="text" id="restoreSourcePath" v-model="restoreForm.sourcePath" placeholder="e.g., /backup-folder/data/file.zip">
+                </div>
+
+                <!-- Opsi untuk Restore Database -->
+                <div v-if="restoreForm.target === 'database'" class="db-group">
+                     <div class="form-group">
+                        <label for="destDbName">Destination DB Name</label>
+                        <input type="text" id="destDbName" v-model="restoreForm.destDbName">
+                    </div>
+                    <div class="form-group">
+                        <label for="destDbUser">DB Username</label>
+                        <input type="text" id="destDbUser" v-model="restoreForm.destDbUser">
+                    </div>
+                     <div class="form-group">
+                        <label for="destDbPass">DB Password</label>
+                        <input type="password" id="destDbPass" v-model="restoreForm.destDbPass">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Restore Options</label>
+                    <select v-model="restoreForm.restoreOption">
+                        <option>Overwrite</option>
+                        <option>Append</option>
+                    </select>
                 </div>
 
                 <div class="modal-actions">
-                    <button type="button" @click="closeModal" class="btn-secondary">Cancel</button>
-                    <button type="submit" class="btn-success">Start Restore</button>
+                    <button type="submit" class="btn-success full-width">Start Job</button>
                 </div>
             </form>
         </div>
@@ -212,7 +291,7 @@ const startRestore = () => {
 .stat-card h3 { font-size: 1rem; color: #6c757d; margin-bottom: 10px; }
 .stat-card p { font-size: 2.2rem; font-weight: 700; color: var(--primary-color); }
 .quick-actions .action-buttons { display: flex; gap: 15px; }
-.action-btn { flex-grow: 1; padding: 25px; border: none; border-radius: 6px; cursor: pointer; font-size: 1.2rem; font-weight: 600; color: #fff; transition: opacity 0.3s; }
+.action-btn { flex-grow: 1; padding: 60px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 1.5rem; font-weight: 600; color: #fff; transition: opacity 0.3s; }
 .action-btn:hover { opacity: 0.9; }
 .backup-btn { background-color: #007bff; }
 .restore-btn { background-color: #28a745; }
@@ -226,7 +305,7 @@ const startRestore = () => {
 
 @media (max-width: 992px) { .dashboard-grid { grid-template-columns: 1fr; } }
 
-/* --- STYLE UNTUK MODAL --- */
+/* --- STYLE BARU UNTUK MODAL --- */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -238,36 +317,59 @@ const startRestore = () => {
   justify-content: center;
   align-items: center;
   z-index: 1000;
+  padding: 20px;
 }
 
 .modal-content {
   background-color: #fff;
-  padding: 30px;
   border-radius: 8px;
   box-shadow: 0 5px 15px rgba(0,0,0,0.3);
   width: 90%;
   max-width: 500px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
 }
 
-.modal-content h2 {
-  margin-top: 0;
-  margin-bottom: 25px;
-  border-bottom: 1px solid #eee;
-  padding-bottom: 15px;
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    border-bottom: 1px solid #eee;
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+}
+
+.close-button {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #888;
+}
+
+.modal-content form {
+    padding: 20px;
+    overflow-y: auto;
 }
 
 .form-group {
-  margin-bottom: 15px;
+  margin-bottom: 20px;
 }
 
 .form-group label {
   display: block;
-  margin-bottom: 5px;
+  margin-bottom: 8px;
   font-weight: 500;
   color: #333;
 }
 
 .form-group input[type="text"],
+.form-group input[type="password"],
 .form-group select {
   width: 100%;
   padding: 10px;
@@ -275,6 +377,23 @@ const startRestore = () => {
   border-radius: 4px;
   font-size: 1rem;
 }
+
+.file-input {
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 5px;
+}
+
+.db-group {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.db-group .form-group:last-child {
+    grid-column: span 2;
+}
+
 
 .radio-group {
     display: flex;
@@ -289,24 +408,68 @@ const startRestore = () => {
     gap: 5px;
 }
 
+.backup-scheme {
+    border: 1px solid #eee;
+    background-color: #f9f9f9;
+    padding: 15px;
+    border-radius: 6px;
+    margin-top: 10px;
+}
+
+.backup-scheme h3 {
+    margin: 0 0 10px 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.schedule-options {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+.hour-input {
+    width: 60px;
+    text-align: center;
+    padding: 5px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.form-group-inline {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 20px;
+}
+.checkbox-group {
+    padding-bottom: 10px;
+}
+.checkbox-group label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
 
 .modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 30px;
+  margin-top: 20px;
 }
 
 .btn-primary, .btn-secondary, .btn-success {
-    padding: 10px 20px;
+    padding: 12px 20px;
     border: none;
     border-radius: 5px;
     cursor: pointer;
     font-weight: 500;
+    font-size: 1rem;
 }
 .btn-primary { background-color: #007bff; color: white; }
 .btn-success { background-color: #28a745; color: white; }
 .btn-secondary { background-color: #6c757d; color: white; }
+
+.full-width {
+    width: 100%;
+}
 
 </style>
 
