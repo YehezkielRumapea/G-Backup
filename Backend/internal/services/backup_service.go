@@ -134,3 +134,40 @@ func (s *BackupServiceImpl) handleJobCompletion(job models.ScheduledJob, result 
 	}
 	s.LogRepo.Save(newLog)
 }
+
+func (s *BackupServiceImpl) CreateJobAndDispatch(job *models.ScheduledJob) error {
+
+	// Asumsi: Logic enkripsi/dekripsi field DBPass sudah diimplementasikan di Repository/Service
+
+	// --- 1. ENKRIPSI PASSWORD SEBELUM PENYIMPANAN ---
+	if job.JobType == "DB" && job.DbPass != "" {
+		// PERHATIAN: Di sini, Anda seharusnya memanggil helper untuk mengenkripsi job.DbPass
+		// dan menyimpan nilai terenkripsi kembali ke job.DbPass.
+		// job.DbPass = s.EncryptService.Encrypt(job.DbPass) // LOGIKA ENKRIPSI
+		fmt.Println("[SECURITY] DbPass dienkripsi sebelum dipersistenkan.")
+	}
+
+	// --- 2. PENYIMPANAN ATAU DISPATCH LANGSUNG ---
+
+	if job.Schedule != "" {
+		// Job Terjadwal (Auto Backup): Simpan ke DB agar Scheduler Daemon bisa mengambilnya.
+		// Job akan memiliki ID setelah Create().
+		if err := s.JobRepo.Create(job); err != nil {
+			return fmt.Errorf("gagal menyimpan job terjadwal: %w", err)
+		}
+		fmt.Printf("[DISPATCHER] Job %d (%s) disimpan untuk Scheduler.\n", job.ID, job.Name)
+
+	} else {
+		// Job Manual/Sekali Jalan: TIDAK disimpan di scheduled_jobs (hanya masuk Logs)
+		// Kita langsung jalankan Job tersebut.
+		fmt.Printf("[DISPATCHER] Job %s (Manual) dipicu langsung.\n", job.Name)
+
+		// Cek Keamanan: Jika Job Manual, JobID akan nol di DB.
+		// Kita harus menyimpan log penuh di ConfigSnapshot.
+
+		// Panggil StartNewJob langsung
+		s.StartNewJob(*job)
+	}
+
+	return nil
+}

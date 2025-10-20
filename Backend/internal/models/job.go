@@ -11,6 +11,7 @@ type ScheduledJob struct {
 	SourceType string `gorm:"type:enum('FILE','DB');size:10;not null"`
 	SourcePath string `gorm:"size:255;not null"` // Path Lokal atau Nama DB
 	DbUser     string // Dibutuhkan untuk mysqldump (Password di-handle via env/config)
+	DbPass     string // Dibutuhkan untuk mysqldump
 
 	// Remote dan Enkripsi
 	RemoteID      uint   `gorm:"not null"` // Foreign Key ke tabel Remote (jika Anda membuatnya)
