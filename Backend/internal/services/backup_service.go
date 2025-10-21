@@ -24,19 +24,28 @@ func NewBackupService(jRepo repository.JobRepository, lRepo repository.LogReposi
 
 func (s *BackupServiceImpl) buildRcloneArgs(job models.ScheduledJob, tempDumpPath string) []string {
 	// Path
-	sourcePathRclone := job.SourcePath
-	if tempDumpPath != "" {
-		sourcePathRclone = tempDumpPath
-	}
-	destination := fmt.Sprintf("%s:%s", job.RemoteName, job.DestinationPath)
-	// Arg Rclone
-	command := "copy"
-	if job.RcloneMode != "" {
+	isRestore := job.RcloneMode == "Restore"
+
+	var SourcePath, Destination string
+	command := job.RcloneMode
+
+	if isRestore {
+		SourcePath = fmt.Sprintf("%s:%s", job.RemoteName, job.DestinationPath)
+		Destination = job.DestinationPath
+		command = "copy"
+	} else {
+		SourcePath = job.SourcePath
+		if tempDumpPath != "" {
+			SourcePath = tempDumpPath
+		}
+		Destination = fmt.Sprintf("%s:%s", job.RemoteName, job.DestinationPath)
 		command = job.RcloneMode
 	}
-	args := []string{command, sourcePathRclone, destination}
-	args = append(args, "--checksum")
 
+	args := []string{command, SourcePath, Destination}
+	if !isRestore {
+		args = append(args, "--checksum")
+	}
 	if job.IsEncrypted {
 		s.injectEncrytionFlags(&args, job)
 	}
@@ -66,9 +75,10 @@ func (s *BackupServiceImpl) StartNewJob(job models.ScheduledJob) {
 
 	go func() {
 		fmt.Printf("[%d] job %s: Memulai Eksekusi Rclone...\n", job.ID, job.Name)
+		// Pre-script Logic
 		if job.JobType == "DB" {
 			var err error
-			tempDumpPath, err = s.ExecuteRcloneJob(job)
+			tempDumpPath, err = s.executeDumpDB(job)
 			if err != nil {
 				s.handleJobCompletion(job, RcloneResult{Success: false, ErrorMsg: err.Error()}, tempDumpPath)
 				return
@@ -86,10 +96,10 @@ func (s *BackupServiceImpl) StartNewJob(job models.ScheduledJob) {
 
 func (s *BackupServiceImpl) executeDumpDB(job models.ScheduledJob) (string, error) {
 	tempPath := fmt.Sprintf("/tmp/db_dump_%d_%d.sql", job.ID, time.Now().Unix())
-	DbPass := os.Getenv("DB_PASS")
 	dumpArgs := []string{
+		"mysqldump",
 		fmt.Sprintf("-u%s", job.DbUser),
-		fmt.Sprintf("-p%s", DbPass),
+		fmt.Sprintf("-p%s", job.DbPass),
 		job.SourcePath,
 		"-r", tempPath,
 	}

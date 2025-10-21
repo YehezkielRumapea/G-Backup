@@ -11,6 +11,7 @@ import (
 
 type BackupService interface {
 	StartNewJob(job models.ScheduledJob)
+	CreateJobAndDispatch(job *models.ScheduledJob) error
 }
 type SchedulerService interface {
 	StartDaemon()

@@ -2,14 +2,16 @@ package cmd
 
 import (
 	"fmt"
-	"gbackup-system/backend/database"
-	"gbackup-system/backend/internal/controllers"
-	"gbackup-system/backend/internal/repository"
-	"gbackup-system/backend/internal/services"
 	"net/http"
 	"os"
 
-	echojwt "github.com/labstack/echo-jwt/v4" //
+	"gbackup-system/backend/database"
+	"gbackup-system/backend/internal/controllers" // Perbaikan: Gunakan 'handler'
+	"gbackup-system/backend/internal/repository"
+	"gbackup-system/backend/internal/services"
+
+	// Frameworks dan Middleware
+	echojwt "github.com/labstack/echo-jwt/v4"
 	"github.com/labstack/echo/v4"
 	echomid "github.com/labstack/echo/v4/middleware"
 )
@@ -43,6 +45,8 @@ func main() {
 	authHandler := controllers.NewAuthHandler(authSvc)
 	monitorHandler := controllers.NewMonitoringHandler(monitorSvc)
 	jobHandler := controllers.NewJobHandler(schedulerSvc, jobRepo)
+	backupHandler := controllers.NewBackupHandler(backupSvc)   // Post/jobs/new
+	restoreHandler := controllers.NewRestoreHandler(backupSvc) //Post/jobs/restore
 	// Job Handler di inisialisasi disini
 
 	// 4. Seeding Admin awal
@@ -66,6 +70,11 @@ func main() {
 		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete},
 	}))
 
+	// Handler Health Check
+	e.GET("/", func(c echo.Context) error {
+		return c.String(http.StatusOK, "G-Backup System is running")
+	})
+
 	// SetUp Routing
 	// 1. Route Publik
 	e.POST("/api/v1/auth/login", authHandler.Login)
@@ -75,14 +84,17 @@ func main() {
 		SigningKey: []byte(jwtSecretKey),
 	}))
 
-	// Route Monitoring
+	// Route Monitoring and Logs
 	r.GET("/monitoring/remotes", monitorHandler.GetRemoteStatusList)
 	r.GET("/monitoring/logs", monitorHandler.GetJobLogs)
 
-	// Job Route
-	r.GET("/jobs/scheduled", jobHandler.GetScheduledJob)
+	// Job Management Route
+	r.GET("/jobs/scheduled", jobHandler.GetScheduledJob)   // List Job
+	r.POST("/jobs/new", backupHandler.CreateNewJob)        // Create/Dispatch Backup/Manual
+	r.POST("/jobs/restore", restoreHandler.TriggerRestore) // Create/Dispatch Restore Job
 
 	// Scheduler Daemon
+	// Mulai Goutine untuk Cron-Job
 	schedulerSvc.StartDaemon()
 
 	// Start Server

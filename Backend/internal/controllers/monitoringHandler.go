@@ -51,4 +51,13 @@ func (h *MonitoringHandler) GetRemoteStatusList(c echo.Context) error {
 	return c.JSON(http.StatusOK, responseData)
 }
 
-func (h *MonitoringHandler) GetJobLogs(c echo.Context)
+func (h *MonitoringHandler) GetJobLogs(c echo.Context) error {
+	logs, err := h.MonitoringSvc.GetJobLogs()
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "gagal mengambil data log: " + err.Error(),
+		})
+	}
+
+	return c.JSON(http.StatusOK, logs)
+}
