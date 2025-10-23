@@ -16,7 +16,7 @@ type JobResponse struct {
 	ID          uint       `json:"id"`
 	Name        string     `json:"name"`
 	RemoteName  string     `json:"remoteName"`
-	JobType     string     `json:"jobType"`
+	SourceType  string     `json:"SourceType"`
 	RcloneMode  string     `json:"rcloneMode"`
 	LastRun     *time.Time `json:"lastRun"`
 	StatusQueue string     `json:"statusQueue"`
@@ -53,13 +53,13 @@ func (h *JobHandler) GetScheduledJob(c echo.Context) error {
 		}
 
 		// Logic Next Run
-		nextRun := h.Schedulersvc.CalculateNextRun(job.Schedule, LastRun)
+		nextRun := h.Schedulersvc.CalculateNextRun(job.ScheduleCron, LastRun)
 
 		responseData = append(responseData, JobResponse{
 			ID:          job.ID,
 			Name:        job.Name,
 			RemoteName:  job.RemoteName,
-			JobType:     job.JobType,
+			SourceType:  job.SourceType,
 			RcloneMode:  job.RcloneMode,
 			LastRun:     &LastRun,
 			StatusQueue: job.StatusQueue,

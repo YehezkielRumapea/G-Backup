@@ -64,7 +64,7 @@ func (s *SchedulerServiceImpl) RunScheduledJob() error {
 			lastRunTime = *job.LastRun
 		}
 
-		nextRun := s.CalculateNextRun(job.Schedule, lastRunTime)
+		nextRun := s.CalculateNextRun(job.ScheduleCron, lastRunTime)
 
 		if nextRun.Before(now) {
 

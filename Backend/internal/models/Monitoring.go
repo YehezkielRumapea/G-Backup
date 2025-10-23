@@ -4,24 +4,15 @@ import "time"
 
 // Monitoring merepresentasikan satu baris di tabel 'monitoring'
 type Monitoring struct {
-	RemoteID uint `gorm:"primaryKey"`
+	ID uint `gorm:"primaryKey;type:int unsigned"`
 
-	// Nama Remote GDrive
-	RemoteName string `gorm:"size:100;unique;not null"`
+	RemoteName string `gorm:"column:remote_name;size:100;unique;not null"`
 
-	// Status Koneksi
-	StatusConnect string `gorm:"type:enum('CONNECTED','DISCONNECTED');not null"`
+	StatusConnect string `gorm:"column:status_connect;type:enum('CONNECTED','DISCONNECTED');not null"`
 
-	// Metrik Storage (Menggunakan float64 untuk presisi GB/TB)
-	TotalStorageGB float64 `gorm:"default:0"`
-	UsedStorageGB  float64 `gorm:"default:0"`
-	FreeStorageGB  float64 `gorm:"default:0"` // Kolom yang bisa dihitung ulang
+	TotalStorageGB float64 `gorm:"column:total_storage_gb;default:0"`
+	UsedStorageGB  float64 `gorm:"column:used_storage_gb;default:0"`
+	FreeStorageGB  float64 `gorm:"column:free_storage_gb;default:0"`
 
-	// Timestamp
-	LastCheckedAt time.Time
+	LastCheckedAt time.Time `gorm:"column:last_checked_at"`
 }
-
-// Catatan:
-// 1. Field JobCount akan ditambahkan ke struct terpisah (Response DTO)
-//    di lapisan Service/Handler setelah dihitung.
-// 2. Struct ini diganti nama menjadi 'Monitoring' agar konsisten dengan tabel DB.

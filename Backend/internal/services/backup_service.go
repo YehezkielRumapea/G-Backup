@@ -76,7 +76,7 @@ func (s *BackupServiceImpl) StartNewJob(job models.ScheduledJob) {
 	go func() {
 		fmt.Printf("[%d] job %s: Memulai Eksekusi Rclone...\n", job.ID, job.Name)
 		// Pre-script Logic
-		if job.JobType == "DB" {
+		if job.SourceType == "DB" {
 			var err error
 			tempDumpPath, err = s.executeDumpDB(job)
 			if err != nil {
@@ -114,7 +114,7 @@ func (s *BackupServiceImpl) executeDumpDB(job models.ScheduledJob) (string, erro
 }
 
 func (s *BackupServiceImpl) ExecuteRcloneJob(job models.ScheduledJob) (string, error) {
-	if job.JobType == "DB" {
+	if job.SourceType == "DB" {
 		return s.executeDumpDB(job)
 	}
 	return "", nil
@@ -135,14 +135,14 @@ func (s *BackupServiceImpl) handleJobCompletion(job models.ScheduledJob, result 
 	}
 
 	newLog := &models.Log{
-		JobID:         job.ID,
-		JobName:       job.Name,
-		OperationType: job.JobType,
+		JobID:         &job.ID,
+		OperationType: job.SourceType,
 		Status:        logstatus,
 		Timestamp:     time.Now(),
 		DurationSec:   int(result.Duration.Seconds()),
+		Message:       result.Output + result.ErrorMsg,
 	}
-	s.LogRepo.Save(newLog)
+	s.LogRepo.CreateLog(newLog)
 }
 
 func (s *BackupServiceImpl) CreateJobAndDispatch(job *models.ScheduledJob) error {
@@ -150,7 +150,7 @@ func (s *BackupServiceImpl) CreateJobAndDispatch(job *models.ScheduledJob) error
 	// Asumsi: Logic enkripsi/dekripsi field DBPass sudah diimplementasikan di Repository/Service
 
 	// --- 1. ENKRIPSI PASSWORD SEBELUM PENYIMPANAN ---
-	if job.JobType == "DB" && job.DbPass != "" {
+	if job.SourceType == "DB" && job.DbPass != "" {
 		// PERHATIAN: Di sini, Anda seharusnya memanggil helper untuk mengenkripsi job.DbPass
 		// dan menyimpan nilai terenkripsi kembali ke job.DbPass.
 		// job.DbPass = s.EncryptService.Encrypt(job.DbPass) // LOGIKA ENKRIPSI
@@ -159,7 +159,7 @@ func (s *BackupServiceImpl) CreateJobAndDispatch(job *models.ScheduledJob) error
 
 	// --- 2. PENYIMPANAN ATAU DISPATCH LANGSUNG ---
 
-	if job.Schedule != "" {
+	if job.ScheduleCron != "" {
 		// Job Terjadwal (Auto Backup): Simpan ke DB agar Scheduler Daemon bisa mengambilnya.
 		// Job akan memiliki ID setelah Create().
 		if err := s.JobRepo.Create(job); err != nil {

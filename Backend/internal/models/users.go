@@ -4,12 +4,12 @@ import "time"
 
 // User merepresentasikan satu baris di tabel 'users' untuk otentikasi.
 type User struct {
-	ID           uint   `gorm:"primaryKey"`
+	ID           uint   `gorm:"primaryKey;type:int unsigned"`
 	Username     string `gorm:"size:50;unique;not null"`
-	PasswordHash string `gorm:"size:255;not null"`
-	IsActive     bool   `gorm:"default:true"` // Untuk mengontrol status user
+	Email        string `gorm:"size:100;unique;not null"`
+	PasswordHash string `gorm:"column:password_hash;size:255;not null"`
+	IsActive     bool   `gorm:"column:is_active;default:true"`
 
-	// Timestamp standar GORM
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }

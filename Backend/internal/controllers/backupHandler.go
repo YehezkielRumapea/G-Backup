@@ -14,7 +14,7 @@ type BackupRequest struct {
 	JobName         string `json:"job_name" validate:"required"`
 	SourcePath      string `json:"source_path" validate:"required"`
 	RemoteName      string `json:"remote_name" validate:"required"`
-	JobType         string `json:"job_type" validate:"required"`         // FILE atau DB
+	SourceType      string `json:"job_type" validate:"required"`         // FILE atau DB
 	DestinationPath string `json:"destination_path" validate:"required"` // Path di cloud
 	ScheduleCron    string `json:"schedule_cron"`                        // CRON string (kosong jika Manual)
 	IsEncrypted     bool   `json:"is_encrypted"`
@@ -55,12 +55,12 @@ func (h *BackupHandler) CreateNewJob(c echo.Context) error {
 	newJob := models.ScheduledJob{
 		UserID:          userID,
 		Name:            req.JobName,
-		JobType:         req.JobType,
-		SourceType:      opMode,
+		SourceType:      req.SourceType,
+		OperationMode:   opMode,
 		SourcePath:      req.SourcePath,
 		RemoteName:      req.RemoteName,
 		DestinationPath: req.DestinationPath,
-		Schedule:        req.ScheduleCron,
+		ScheduleCron:    req.ScheduleCron,
 		IsEncrypted:     req.IsEncrypted,
 
 		// KRITIS: DbUser dan DbPass disimpan di struct sebelum dikirim ke Service

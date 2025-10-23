@@ -15,7 +15,7 @@ type RestoreRequest struct {
 	RemoteName  string `json:"remote_name" validate:"required"`
 	Sourcepath  string `json:"source_path" validate:"required"`
 	RestorePath string `json:"restore_path" validate:"required"`
-	JobType     string `json:"job_type" validate:"required"`
+	SourceType  string `json:"job_type" validate:"required"`
 
 	// Credential
 	Dbuser string `json:"db_user"`
@@ -45,7 +45,7 @@ func (h *RestoreHandler) TriggerRestore(c echo.Context) error {
 	newjob := models.ScheduledJob{
 		UserID:     userID,
 		Name:       req.JobName,
-		JobType:    req.JobType,
+		SourceType: req.SourceType,
 		RcloneMode: "RESTORE",
 
 		// SourcePath
@@ -53,12 +53,12 @@ func (h *RestoreHandler) TriggerRestore(c echo.Context) error {
 		// DestinationPath
 		DestinationPath: req.RestorePath,
 
-		RemoteName:  req.RemoteName,
-		Schedule:    "", // Manual Job
-		DbUser:      req.Dbuser,
-		DbPass:      req.Dbpass,
-		IsEncrypted: false,
-		StatusQueue: "PENDING",
+		RemoteName:   req.RemoteName,
+		ScheduleCron: "", // Manual Job
+		DbUser:       req.Dbuser,
+		DbPass:       req.Dbpass,
+		IsEncrypted:  false,
+		StatusQueue:  "PENDING",
 	}
 	if err := h.Backupsvc.CreateJobAndDispatch(&newjob); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("Gagal me-restore job: %v", err.Error())})
