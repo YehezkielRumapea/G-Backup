@@ -24,7 +24,7 @@ func Connect() *gorm.DB {
 	dbName := os.Getenv("DB_NAME")
 
 	// Data Source Na,=me (dSn)
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s/%s)?charset=utf8mb4&parseTime=True&loc=Local",
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
 		dbUser,
 		dbPass,
 		dbHost,

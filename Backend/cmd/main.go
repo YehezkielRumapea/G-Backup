@@ -5,13 +5,13 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"time"
 
 	"gbackup-system/backend/database"
 	"gbackup-system/backend/internal/controllers" // Perbaikan: Gunakan 'handler'
 	"gbackup-system/backend/internal/repository"
 	"gbackup-system/backend/internal/services"
+	"path/filepath"
 
 	// Frameworks dan Middleware
 	"github.com/joho/godotenv"
@@ -23,11 +23,37 @@ import (
 const DefaultAdminUsername = "admin"
 const DefaultAdminPassword = "admin123"
 
-func main() {
-	rootDir := filepath.Join("G-Backup/Backend", ".env")
-	if err := godotenv.Load(rootDir); err != nil {
-		fmt.Println("File .env tidak ditemukan, menggunakan environment sistem")
+func loadDotEnv() {
+	exePath, err := os.Executable()
+	if err != nil {
+		fmt.Println("Tidak bisa dapatkan path executable:", err)
+		return
 	}
+	exeDir := filepath.Dir(exePath)
+
+	// Cari .env di: direktori binary, parent, dan parent’s parent
+	candidates := []string{
+		filepath.Join(exeDir, ".env"),
+		filepath.Join(exeDir, "..", ".env"),
+		filepath.Join(exeDir, "..", "..", ".env"),
+	}
+
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			if err := godotenv.Load(p); err == nil {
+				fmt.Println("Loaded .env dari:", p)
+				return
+			}
+		}
+	}
+
+	// fallback: coba relative ke CWD (kalau kebetulan cocok)
+	_ = godotenv.Load(".env", "../.env")
+}
+
+func main() {
+
+	loadDotEnv()
 
 	jwtSecretKey := os.Getenv("JWT_SECRET_KEY")
 	if jwtSecretKey == "" {
