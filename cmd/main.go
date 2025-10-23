@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"gbackup-system/backend/database"
@@ -13,6 +14,7 @@ import (
 	"gbackup-system/backend/internal/services"
 
 	// Frameworks dan Middleware
+	"github.com/joho/godotenv"
 	echojwt "github.com/labstack/echo-jwt/v4"
 	"github.com/labstack/echo/v4"
 	echomid "github.com/labstack/echo/v4/middleware"
@@ -22,13 +24,18 @@ const DefaultAdminUsername = "admin"
 const DefaultAdminPassword = "admin123"
 
 func main() {
-	// Setup DB dan Connection
-	dbInstance := database.Connect()
+	rootDir := filepath.Join("G-Backup/Backend", ".env")
+	if err := godotenv.Load(rootDir); err != nil {
+		fmt.Println("File .env tidak ditemukan, menggunakan environment sistem")
+	}
 
-	jwtSecretKey := os.Getenv("JWT_SECRET")
+	jwtSecretKey := os.Getenv("JWT_SECRET_KEY")
 	if jwtSecretKey == "" {
 		log.Fatal("fatal: env key not found")
 	}
+
+	// Setup DB dan Connection
+	dbInstance := database.Connect()
 
 	// Dependensi Injextion
 	// 1. Inisiasliasi Repo (Data Access)
@@ -39,6 +46,7 @@ func main() {
 
 	// 2. Inisiaslisasi Servicews
 	authSvc := services.NewAuthService(userRepo)
+	authSvc.SetSecretKey(jwtSecretKey)
 	monitorSvc := services.NewMonitoringService(MonitorRepo, LogRepo)
 	backupSvc := services.NewBackupService(jobRepo, LogRepo)
 	schedulerSvc := services.NewSchedulerService(jobRepo, backupSvc)

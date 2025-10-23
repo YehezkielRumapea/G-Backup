@@ -2,8 +2,6 @@ package services
 
 import (
 	"fmt"
-	"log"
-	"os"
 	"time"
 
 	"gbackup-system/backend/internal/models"
@@ -12,17 +10,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
-
-var JwtSecretKey string
-
-func init() {
-	JwtSecretKey = os.Getenv("JWT_SECRET")
-
-	if JwtSecretKey == "" {
-		log.Fatal("JWT_SECRET environment variable is not set")
-	}
-
-}
 
 type LoginRequest struct {
 	Username string `json:"username"`
@@ -33,16 +20,23 @@ type LoginRequest struct {
 type AuthService interface {
 	Authenticate(req *LoginRequest) (string, error)
 	RegisterAdmin(username, password string) error
+	SetSecretKey(key string)
 }
 
 // Implemen AuthService
 type AuthServiceImpl struct {
-	userRepo repository.UserRepository
+	userRepo     repository.UserRepository
+	jwtSecretKey string
 }
 
 // Constructoe Dependency Injection
 func NewAuthService(userRepo repository.UserRepository) AuthService {
 	return &AuthServiceImpl{userRepo: userRepo}
+}
+
+// Method to set secret key
+func (s *AuthServiceImpl) SetSecretKey(key string) {
+	s.jwtSecretKey = key
 }
 
 // Main logic autentication
@@ -72,7 +66,7 @@ func (s *AuthServiceImpl) Authenticate(req *LoginRequest) (string, error) {
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	signedToken, err := token.SignedString([]byte(JwtSecretKey))
+	signedToken, err := token.SignedString([]byte(s.jwtSecretKey))
 	if err != nil {
 		return "", fmt.Errorf("gagal membuat token: %w", err)
 	}
