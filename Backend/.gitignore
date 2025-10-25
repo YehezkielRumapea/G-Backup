@@ -15,6 +15,6 @@
 # OS junk
 .DS_Store
 Thumbs.db
-
+.exe
 # Tambahan (misalnya jika menggunakan vendor)
 # vendor/
