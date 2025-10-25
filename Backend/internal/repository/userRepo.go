@@ -30,7 +30,7 @@ func (r *UserRepositoryImpl) CreateUser(user *models.User) error {
 func (r *UserRepositoryImpl) FindByUsername(Username string) (*models.User, error) {
 	var user models.User
 
-	result := r.DB.Where("usesrname = ?", Username).First(&user)
+	result := r.DB.Where("username = ?", Username).First(&user)
 
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
