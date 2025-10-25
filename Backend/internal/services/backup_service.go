@@ -1,7 +1,6 @@
 package services
 
 import (
-	"crypto/rand"
 	"encoding/base64"
 	"fmt"
 	"gbackup-system/backend/internal/models"
@@ -22,23 +21,28 @@ func NewBackupService(jRepo repository.JobRepository, lRepo repository.LogReposi
 	})
 }
 
-func (s *BackupServiceImpl) buildRcloneArgs(job models.ScheduledJob, tempDumpPath string) []string {
+func (s *BackupServiceImpl) buildRcloneArgs(job models.ScheduledJob, tempDumpPath string) ([]string, error) {
+	if job.RemoteName == "" {
+		return nil, fmt.Errorf("RemoteName tidak boleh kosong")
+	}
 	// Path
-	isRestore := job.RcloneMode == "Restore"
+	isRestore := job.OperationMode == "Restore"
 
 	var SourcePath, Destination string
 	command := job.RcloneMode
 
 	if isRestore {
-		SourcePath = fmt.Sprintf("%s:%s", job.RemoteName, job.DestinationPath)
+		// Sumber dari cloud --> Lokal
+		SourcePath = fmt.Sprintf("%s:%s", job.RemoteName, job.SourcePath)
 		Destination = job.DestinationPath
 		command = "copy"
 	} else {
+		// Sumber dari Lokal --> Cloud
 		SourcePath = job.SourcePath
 		if tempDumpPath != "" {
 			SourcePath = tempDumpPath
 		}
-		Destination = fmt.Sprintf("%s:%s", job.RemoteName, job.DestinationPath)
+		Destination = fmt.Sprintf("%s:%s", job.RemoteName, job.SourcePath)
 		command = job.RcloneMode
 	}
 
@@ -47,27 +51,44 @@ func (s *BackupServiceImpl) buildRcloneArgs(job models.ScheduledJob, tempDumpPat
 		args = append(args, "--checksum")
 	}
 	if job.IsEncrypted {
-		s.injectEncrytionFlags(&args, job)
+		s.injectEncryptionFlags(&args, job)
 	}
-	return args
+	return args, nil
 }
 
-func generateRandomSalt(length int) string {
-	bytes := make([]byte, length)
-	rand.Read(bytes)
-	return base64.StdEncoding.EncodeToString(bytes)[:length]
+func generateDeterministicSalt(jobID uint, key string) string {
+	// Kombinasi JobID + Key akan selalu menghasilkan salt yang sama
+	input := fmt.Sprintf("%d:%s", jobID, key)
+	bytes := []byte(input)
+
+	// Pad atau truncate ke 32 karakter
+	if len(bytes) < 32 {
+		// Repeat sampai 32
+		for len(bytes) < 32 {
+			bytes = append(bytes, bytes...)
+		}
+	}
+
+	return base64.StdEncoding.EncodeToString(bytes[:32])[:32]
 }
 
-func (s *BackupServiceImpl) injectEncrytionFlags(args *[]string, job models.ScheduledJob) {
+func (s *BackupServiceImpl) injectEncryptionFlags(args *[]string, job models.ScheduledJob) error {
 	key := job.EncryptionKey
-	salt := generateRandomSalt(32)
+	if key == "" {
+		return fmt.Errorf("encryption key tidak boleh kosong")
+	}
+
+	salt := generateDeterministicSalt(job.ID, key)
 
 	*args = append(*args,
+		"--crypt-remote", job.RemoteName, // Remote yang akan di-encrypt
 		"--crypt-filename-encryption", "standard",
 		"--crypt-password", key,
-		"--crypt-salt", salt,
+		"--crypt-password2", salt, // ✅ Flag yang benar untuk salt
 	)
+
 	fmt.Println("[ARGS] Enkripsi Runtime Dijalankan")
+	return nil
 }
 
 func (s *BackupServiceImpl) StartNewJob(job models.ScheduledJob) {
@@ -76,7 +97,8 @@ func (s *BackupServiceImpl) StartNewJob(job models.ScheduledJob) {
 	go func() {
 		fmt.Printf("[%d] job %s: Memulai Eksekusi Rclone...\n", job.ID, job.Name)
 		// Pre-script Logic
-		if job.SourceType == "DB" {
+		// hanya berjalan keetika yang di backup DB dan bukan Restore
+		if job.SourceType == "DB" && job.OperationMode != "RESTORE" {
 			var err error
 			tempDumpPath, err = s.executeDumpDB(job)
 			if err != nil {
@@ -85,8 +107,15 @@ func (s *BackupServiceImpl) StartNewJob(job models.ScheduledJob) {
 			}
 		}
 
-		rcloneArgs := s.buildRcloneArgs(job, tempDumpPath)
+		// Eksekusi Rclone
+		rcloneArgs, err := s.buildRcloneArgs(job, tempDumpPath)
+		if err != nil {
+			s.handleJobCompletion(job, RcloneResult{Success: false, ErrorMsg: err.Error()}, tempDumpPath)
+			return
+		}
 		result := ExecuteRcloneJob(rcloneArgs)
+
+		// Post-script
 		s.handleJobCompletion(job, result, tempDumpPath)
 
 		pesan := fmt.Sprintf("[%d] Job %s: selesai. Status masuk ke log\n", job.ID, job.Name)
@@ -113,69 +142,56 @@ func (s *BackupServiceImpl) executeDumpDB(job models.ScheduledJob) (string, erro
 	return tempPath, nil
 }
 
-func (s *BackupServiceImpl) ExecuteRcloneJob(job models.ScheduledJob) (string, error) {
-	if job.SourceType == "DB" {
-		return s.executeDumpDB(job)
-	}
-	return "", nil
-}
-
+// Post-script
 func (s *BackupServiceImpl) handleJobCompletion(job models.ScheduledJob, result RcloneResult, tempDumpPath string) {
+	defer func() {
+		if job.OperationMode == "BACKUP" && tempDumpPath != "" {
+			if err := os.Remove(tempDumpPath); err != nil {
+				fmt.Printf("[WARNING] Gagal menghapus file sementara: %v\n", err)
+			} else {
+				fmt.Printf("[INFO] File sementara berhasil dihapus: %s\n", tempDumpPath)
+			}
+		}
+	}()
+
 	LogMutex.Lock()
 	defer LogMutex.Unlock()
 
-	logstatus := "Failed"
+	logstatus := "FAIL"
 
 	if result.Success {
-		logstatus = "Completed"
-
-		if tempDumpPath != "" {
-			os.Remove(tempDumpPath)
-		}
+		logstatus = "SUCCESS"
 	}
 
+	// Logging
 	newLog := &models.Log{
 		JobID:         &job.ID,
-		OperationType: job.SourceType,
+		OperationType: job.OperationMode,
 		Status:        logstatus,
 		Timestamp:     time.Now(),
 		DurationSec:   int(result.Duration.Seconds()),
 		Message:       result.Output + result.ErrorMsg,
 	}
 	s.LogRepo.CreateLog(newLog)
+
+	if job.ScheduleCron != "" {
+		s.JobRepo.UpdateLastRunStatus(job.ID, time.Now(), logstatus)
+	}
 }
 
 func (s *BackupServiceImpl) CreateJobAndDispatch(job *models.ScheduledJob) error {
-
-	// Asumsi: Logic enkripsi/dekripsi field DBPass sudah diimplementasikan di Repository/Service
-
 	// --- 1. ENKRIPSI PASSWORD SEBELUM PENYIMPANAN ---
 	if job.SourceType == "DB" && job.DbPass != "" {
-		// PERHATIAN: Di sini, Anda seharusnya memanggil helper untuk mengenkripsi job.DbPass
-		// dan menyimpan nilai terenkripsi kembali ke job.DbPass.
-		// job.DbPass = s.EncryptService.Encrypt(job.DbPass) // LOGIKA ENKRIPSI
 		fmt.Println("[SECURITY] DbPass dienkripsi sebelum dipersistenkan.")
 	}
 
-	// --- 2. PENYIMPANAN ATAU DISPATCH LANGSUNG ---
-
 	if job.ScheduleCron != "" {
-		// Job Terjadwal (Auto Backup): Simpan ke DB agar Scheduler Daemon bisa mengambilnya.
-		// Job akan memiliki ID setelah Create().
 		if err := s.JobRepo.Create(job); err != nil {
 			return fmt.Errorf("gagal menyimpan job terjadwal: %w", err)
 		}
 		fmt.Printf("[DISPATCHER] Job %d (%s) disimpan untuk Scheduler.\n", job.ID, job.Name)
-
 	} else {
-		// Job Manual/Sekali Jalan: TIDAK disimpan di scheduled_jobs (hanya masuk Logs)
-		// Kita langsung jalankan Job tersebut.
 		fmt.Printf("[DISPATCHER] Job %s (Manual) dipicu langsung.\n", job.Name)
-
-		// Cek Keamanan: Jika Job Manual, JobID akan nol di DB.
-		// Kita harus menyimpan log penuh di ConfigSnapshot.
-
-		// Panggil StartNewJob langsung
 		s.StartNewJob(*job)
 	}
 

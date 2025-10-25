@@ -25,11 +25,11 @@ func (r *MonitoringRepositoryImpl) UpsertRemoteStatus(monitoring *models.Monitor
 	result := r.DB.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "RemoteName"}},
 		DoUpdates: clause.AssignmentColumns([]string{
-			"StatusConnect",
-			"TotalStorageGB",
-			"UsedStorageGB",
-			"FreeStorageGB",
-			"LastCheckedAt",
+			"status_connect",
+			"total_storage_gb",
+			"used_storage_gb",
+			"free_storage_gb",
+			"last_checked_at",
 		}),
 	}).Create(monitoring)
 	return result.Error

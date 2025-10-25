@@ -93,20 +93,26 @@ func (s *MonitoringServiceImpl) GetJobLogs() ([]*models.Log, error) {
 }
 
 func (s *MonitoringServiceImpl) GetRcloneConfiguredRemotes() ([]string, error) {
-	// Jalankan Rclone List remotes untuk mendapatkan daftar remote yang dikonfigurasi
-	result := ExecuteRcloneJob([]string{"listremotes"})
+	// Rclone listremotes harus dieksekusi dengan aman
+	result := ExecuteRcloneJob([]string{"rclone", "listremotes"})
 
 	if !result.Success {
 		return nil, fmt.Errorf("gagal menjalankan rclone listremotes: %s", result.ErrorMsg)
 	}
-	// Output command listremotes diakhiri : jadi perlu dihapus
+	// Pisahkan output per baris
 	remotes := strings.Split(result.Output, "\n")
 	var cleanNames []string
 
 	for _, remote := range remotes {
+		// Hapus spasi dan baris kosong di awal dan akhir
 		name := strings.TrimSpace(remote)
-		if len(name) > 0 && strings.HasSuffix(name, ":") {
-			cleanNames = append(cleanNames, name[:len(name)-1])
+
+		// Hanya proses jika baris tidak kosong
+		if len(name) > 0 {
+			// Cek dan Hapus titik dua di akhir
+			if strings.HasSuffix(name, ":") {
+				cleanNames = append(cleanNames, name[:len(name)-1])
+			}
 		}
 	}
 

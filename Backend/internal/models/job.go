@@ -38,5 +38,5 @@ type ScheduledJob struct {
 
 	// Relasi (GORM)
 	User User  `gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
-	Logs []Log `gorm:"foreignKey:JobID;references:ID"`
+	Logs []Log `gorm:"-"`
 }

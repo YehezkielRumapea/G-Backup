@@ -19,10 +19,7 @@ type Log struct {
 	Checksum    string `gorm:"size:255;nullable"`
 
 	// KRUSIAL: Menyimpan konfigurasi Job Manual/Restore
-	ConfigSnapshot string `gorm:"type:json;nullable"`
+	ConfigSnapshot *string `gorm:"type:json;nullable"`
 
 	Timestamp time.Time `gorm:"column:timestamp;default:CURRENT_TIMESTAMP"`
-
-	// Relasi
-	ScheduledJob ScheduledJob `gorm:"foreignKey:JobID"`
 }

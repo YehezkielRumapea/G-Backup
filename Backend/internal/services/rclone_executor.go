@@ -16,8 +16,9 @@ type RcloneResult struct {
 
 func ExecuteRcloneJob(commandArgs []string) RcloneResult {
 	startTime := time.Now()
-
-	cmd := exec.Command("rclone", commandArgs...)
+	cmdName := commandArgs[0]
+	args := commandArgs[1:]
+	cmd := exec.Command(cmdName, args...)
 
 	output, err := cmd.CombinedOutput()
 	duration := time.Since(startTime)

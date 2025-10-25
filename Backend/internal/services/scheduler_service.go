@@ -9,6 +9,17 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
+type JobMonitoring struct {
+	ID           uint   `json:"id"`
+	JobName      string `json:"job_name"`
+	Type         string `json:"type"`
+	GdriveTarget string `json:"gdrive_target"`
+	Mode         string `json:"mode"`
+	LastRun      string `json:"last_run"`
+	Status       string `json:"status"`
+	NextRun      string `json:"next_run"`
+}
+
 type BackupService interface {
 	StartNewJob(job models.ScheduledJob)
 	CreateJobAndDispatch(job *models.ScheduledJob) error
@@ -17,16 +28,21 @@ type SchedulerService interface {
 	StartDaemon()
 	RunScheduledJob() error
 	CalculateNextRun(schedule string, lastRun time.Time) time.Time
+	GetScheduledJobsInfo() ([]JobMonitoring, error)
 }
 
 type SchedulerServiceImpl struct {
 	JobRepo     repository.JobRepository
-	BackupSync  BackupService
+	BackupSvc   BackupService
 	intervalCek time.Duration
 }
 
-func NewSchedulerService(JRepo repository.JobRepository, Bsyc BackupService) SchedulerService {
-	return &SchedulerServiceImpl{JobRepo: JRepo, BackupSync: Bsyc}
+func NewSchedulerService(JRepo repository.JobRepository, Bsvc BackupService) SchedulerService {
+	return &SchedulerServiceImpl{
+		JobRepo:     JRepo,
+		BackupSvc:   Bsvc,
+		intervalCek: 5 * time.Minute,
+	}
 }
 
 // Main Logic
@@ -85,7 +101,7 @@ func (s *SchedulerServiceImpl) RunScheduledJob() error {
 				job.Name,
 				nextRun.Format(time.RFC3339))
 
-			s.BackupSync.StartNewJob(job)
+			s.BackupSvc.StartNewJob(job)
 		}
 	}
 	return nil
@@ -107,4 +123,45 @@ func (s *SchedulerServiceImpl) StartDaemon() {
 			time.Sleep(s.intervalCek)
 		}
 	}()
+}
+
+func (s *SchedulerServiceImpl) GetScheduledJobsInfo() ([]JobMonitoring, error) {
+	// Ambil semua Job yang aktif
+	jobs, err := s.JobRepo.FindActiveJobs()
+	if err != nil {
+		return nil, fmt.Errorf("gagal mengambil job aktif dari DB: %w", err)
+	}
+
+	var Output []JobMonitoring
+
+	//  Loop dan hitung format data
+	for _, job := range jobs {
+		lastRunTime := time.Time{}
+		lastRunStr := ""
+
+		if job.LastRun != nil {
+			lastRunTime = *job.LastRun
+			lastRunStr = job.LastRun.Format("02-01-2006 15:04")
+		}
+
+		//Next Run
+		nextRunTime := s.CalculateNextRun(job.ScheduleCron, lastRunTime)
+
+		// Pembuatan Format Outptu
+		mode := "Auto"
+		JobTypeFormatted := fmt.Sprintf("%s: %s", job.SourceType, job.SourcePath)
+
+		// format Output
+		Output = append(Output, JobMonitoring{
+			ID:           job.ID,
+			JobName:      job.Name,
+			Type:         JobTypeFormatted,
+			GdriveTarget: job.RemoteName,
+			Mode:         mode,
+			LastRun:      lastRunStr,
+			Status:       job.StatusQueue,
+			NextRun:      nextRunTime.Format("02-01-2006 15:04"),
+		})
+	}
+	return Output, nil
 }
