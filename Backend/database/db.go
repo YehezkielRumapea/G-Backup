@@ -17,6 +17,11 @@ func Connect() *gorm.DB {
 	if err := godotenv.Load(); err != nil {
 		log.Println("tidak menemukan file .env")
 	}
+
+	rcloneConfigPath := os.Getenv("RCLONE_CONFIG")
+	if rcloneConfigPath != "" {
+		os.Setenv("RCLONE_CONFIG", rcloneConfigPath)
+	}
 	dbUser := os.Getenv("DB_USER")
 	dbPass := os.Getenv("DB_PASS")
 	dbHost := os.Getenv("DB_HOST")

@@ -15,9 +15,19 @@ type RcloneResult struct {
 }
 
 func ExecuteRcloneJob(commandArgs []string) RcloneResult {
+
+	if len(commandArgs) == 0 {
+		return RcloneResult{
+			Success:  false,
+			ErrorMsg: "Command arguments are empty"}
+	}
+
 	startTime := time.Now()
-	cmdName := commandArgs[0]
-	args := commandArgs[1:]
+	cmdName := "rclone"
+	args := commandArgs
+	if len(args) == 0 {
+		return RcloneResult{Success: false, ErrorMsg: "Command arguments are empty"}
+	}
 	cmd := exec.Command(cmdName, args...)
 
 	output, err := cmd.CombinedOutput()

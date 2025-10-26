@@ -7,7 +7,7 @@ import (
 )
 
 type LogRepository interface {
-	FindAllLogs() ([]models.Log, error)
+	FindAllLogs() ([]*models.Log, error)
 	CreateLog(log *models.Log) error
 	Save(log *models.Log) error
 }
@@ -25,8 +25,8 @@ func NewLogRepository(db *gorm.DB) LogRepository {
 	return &LogRepositoryImpl{LogRepo: db}
 }
 
-func (r *LogRepositoryImpl) FindAllLogs() ([]models.Log, error) {
-	var logs []models.Log
+func (r *LogRepositoryImpl) FindAllLogs() ([]*models.Log, error) {
+	var logs []*models.Log
 	result := r.LogRepo.Preload("ScheduledJob").Order("timestamp desc").Find(&logs)
 	if result.Error != nil && result.Error != gorm.ErrRecordNotFound {
 		return nil, result.Error

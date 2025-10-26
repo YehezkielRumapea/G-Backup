@@ -50,7 +50,6 @@ func (s *MonitoringServiceImpl) UpdateRemoteStatus(remoteName string) error {
 		if err != nil {
 			return fmt.Errorf("gagal Update Status Remote di DB: %v", err)
 		}
-		return fmt.Errorf("gagal terhubung ke %s: %s", remoteName, result.ErrorMsg)
 	}
 
 	if !result.Success {
@@ -85,7 +84,7 @@ func (s *MonitoringServiceImpl) GetRemoteStatusList() ([]*models.Monitoring, err
 }
 
 func (s *MonitoringServiceImpl) GetJobLogs() ([]*models.Log, error) {
-	logs, err := s.MonitorRepo.FindAllLogs()
+	logs, err := s.LogRepo.FindAllLogs()
 	if err != nil {
 		return nil, fmt.Errorf("gagal mengambil log dari db: %v", err)
 	}
@@ -94,7 +93,7 @@ func (s *MonitoringServiceImpl) GetJobLogs() ([]*models.Log, error) {
 
 func (s *MonitoringServiceImpl) GetRcloneConfiguredRemotes() ([]string, error) {
 	// Rclone listremotes harus dieksekusi dengan aman
-	result := ExecuteRcloneJob([]string{"rclone", "listremotes"})
+	result := ExecuteRcloneJob([]string{"listremotes"})
 
 	if !result.Success {
 		return nil, fmt.Errorf("gagal menjalankan rclone listremotes: %s", result.ErrorMsg)

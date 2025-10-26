@@ -6,6 +6,7 @@ import (
 	"gbackup-system/backend/internal/models"
 	"gbackup-system/backend/internal/repository"
 	"os"
+	"os/exec"
 	"time"
 )
 
@@ -27,9 +28,12 @@ func (s *BackupServiceImpl) buildRcloneArgs(job models.ScheduledJob, tempDumpPat
 	}
 	// Path
 	isRestore := job.OperationMode == "Restore"
+	command := job.RcloneMode
 
 	var SourcePath, Destination string
-	command := job.RcloneMode
+	if command == "" {
+		command = "copy"
+	}
 
 	if isRestore {
 		// Sumber dari cloud --> Lokal
@@ -42,8 +46,7 @@ func (s *BackupServiceImpl) buildRcloneArgs(job models.ScheduledJob, tempDumpPat
 		if tempDumpPath != "" {
 			SourcePath = tempDumpPath
 		}
-		Destination = fmt.Sprintf("%s:%s", job.RemoteName, job.SourcePath)
-		command = job.RcloneMode
+		Destination = fmt.Sprintf("%s:%s", job.RemoteName, job.DestinationPath)
 	}
 
 	args := []string{command, SourcePath, Destination}
@@ -93,12 +96,13 @@ func (s *BackupServiceImpl) injectEncryptionFlags(args *[]string, job models.Sch
 
 func (s *BackupServiceImpl) StartNewJob(job models.ScheduledJob) {
 	var tempDumpPath string
-
 	go func() {
+		isRestore := job.OperationMode == "Restore"
+
 		fmt.Printf("[%d] job %s: Memulai Eksekusi Rclone...\n", job.ID, job.Name)
 		// Pre-script Logic
 		// hanya berjalan keetika yang di backup DB dan bukan Restore
-		if job.SourceType == "DB" && job.OperationMode != "RESTORE" {
+		if job.SourceType == "DB" && !isRestore {
 			var err error
 			tempDumpPath, err = s.executeDumpDB(job)
 			if err != nil {
@@ -133,10 +137,12 @@ func (s *BackupServiceImpl) executeDumpDB(job models.ScheduledJob) (string, erro
 		"-r", tempPath,
 	}
 
-	result := ExecuteRcloneJob(dumpArgs)
+	cmd := exec.Command(dumpArgs[0], dumpArgs[1:]...)
+	output, err := cmd.CombinedOutput()
 
-	if !result.Success {
-		return "", fmt.Errorf("MySqlDump Failed For %s:%s", job.SourcePath, result.ErrorMsg)
+	if err != nil {
+		errorMsg := fmt.Sprintf("Exit Error: %v. Output: %s", err, string(output))
+		return "", fmt.Errorf("mysqldump failed for %s:%s", job.SourcePath, errorMsg)
 	}
 
 	return tempPath, nil

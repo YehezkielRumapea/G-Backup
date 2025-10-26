@@ -10,7 +10,6 @@ import (
 type MonitoringRepository interface {
 	UpsertRemoteStatus(Monitoring *models.Monitoring) error
 	FindAllRemote() ([]*models.Monitoring, error)
-	FindAllLogs() ([]*models.Log, error)
 }
 
 type MonitoringRepositoryImpl struct {
@@ -42,13 +41,4 @@ func (r *MonitoringRepositoryImpl) FindAllRemote() ([]*models.Monitoring, error)
 		return nil, result.Error
 	}
 	return remotes, nil
-}
-
-func (r *MonitoringRepositoryImpl) FindAllLogs() ([]*models.Log, error) {
-	var logs []*models.Log
-	result := r.DB.Find(&logs)
-	if result.Error != nil && result.Error != gorm.ErrRecordNotFound {
-		return nil, result.Error
-	}
-	return logs, nil
 }
