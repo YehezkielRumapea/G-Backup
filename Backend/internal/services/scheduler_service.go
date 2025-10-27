@@ -41,7 +41,7 @@ func NewSchedulerService(JRepo repository.JobRepository, Bsvc BackupService) Sch
 	return &SchedulerServiceImpl{
 		JobRepo:     JRepo,
 		BackupSvc:   Bsvc,
-		intervalCek: 5 * time.Minute,
+		intervalCek: 1 * time.Minute,
 	}
 }
 

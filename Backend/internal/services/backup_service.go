@@ -1,6 +1,7 @@
 package services
 
 import (
+	"crypto/rand"
 	"encoding/base64"
 	"fmt"
 	"gbackup-system/backend/internal/models"
@@ -46,6 +47,8 @@ func (s *BackupServiceImpl) buildRcloneArgs(job models.ScheduledJob, tempDumpPat
 		if tempDumpPath != "" {
 			SourcePath = tempDumpPath
 		}
+
+		// Path enkripsi
 		Destination = fmt.Sprintf("%s:%s", job.RemoteName, job.DestinationPath)
 	}
 
@@ -54,7 +57,9 @@ func (s *BackupServiceImpl) buildRcloneArgs(job models.ScheduledJob, tempDumpPat
 		args = append(args, "--checksum")
 	}
 	if job.IsEncrypted {
-		s.injectEncryptionFlags(&args, job)
+		if err := s.injectEncryptionFlags(&args, job); err != nil {
+			return nil, err
+		}
 	}
 	return args, nil
 }
@@ -84,7 +89,6 @@ func (s *BackupServiceImpl) injectEncryptionFlags(args *[]string, job models.Sch
 	salt := generateDeterministicSalt(job.ID, key)
 
 	*args = append(*args,
-		"--crypt-remote", job.RemoteName, // Remote yang akan di-encrypt
 		"--crypt-filename-encryption", "standard",
 		"--crypt-password", key,
 		"--crypt-password2", salt, // ✅ Flag yang benar untuk salt
@@ -185,10 +189,30 @@ func (s *BackupServiceImpl) handleJobCompletion(job models.ScheduledJob, result 
 	}
 }
 
+func GenerateRandomKey(length int) (string, error) {
+	bytes := make([]byte, length)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", fmt.Errorf("gagal membuat kunci enkripsi: %w", err)
+	}
+	return base64.URLEncoding.EncodeToString(bytes), nil
+}
+
 func (s *BackupServiceImpl) CreateJobAndDispatch(job *models.ScheduledJob) error {
 	// --- 1. ENKRIPSI PASSWORD SEBELUM PENYIMPANAN ---
 	if job.SourceType == "DB" && job.DbPass != "" {
 		fmt.Println("[SECURITY] DbPass dienkripsi sebelum dipersistenkan.")
+	}
+
+	if job.IsEncrypted {
+		// hanya menggenerate key jika opsi enkrip di centang
+		if job.EncryptionKey == "" {
+			key, err := GenerateRandomKey(32)
+			if err != nil {
+				return fmt.Errorf("gagal membuat kunci enkripsi: %w", err)
+			}
+			job.EncryptionKey = key
+			fmt.Println("Kunci Enkripsi dibuat ")
+		}
 	}
 
 	if job.ScheduleCron != "" {

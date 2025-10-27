@@ -24,7 +24,7 @@ func ExecuteRcloneJob(commandArgs []string) RcloneResult {
 
 	startTime := time.Now()
 	cmdName := "rclone"
-	args := commandArgs
+	args := append([]string{"-v"}, commandArgs...)
 	if len(args) == 0 {
 		return RcloneResult{Success: false, ErrorMsg: "Command arguments are empty"}
 	}

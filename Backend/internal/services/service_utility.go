@@ -1,5 +1,7 @@
 package services
 
-import "sync"
+import (
+	"sync"
+)
 
 var LogMutex sync.Mutex
