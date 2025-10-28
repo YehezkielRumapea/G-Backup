@@ -75,14 +75,16 @@ func (s *SchedulerServiceImpl) RunScheduledJob() error {
 	now := time.Now()
 
 	for _, job := range jobs {
-		lastRunTime := time.Time{}
+		var baseTime time.Time
 		if job.LastRun != nil {
-			lastRunTime = *job.LastRun
+			baseTime = *job.LastRun
+		} else {
+			baseTime = job.CreatedAt
 		}
 
-		nextRun := s.CalculateNextRun(job.ScheduleCron, lastRunTime)
+		nextRun := s.CalculateNextRun(job.ScheduleCron, baseTime)
 
-		if nextRun.Before(now) {
+		if nextRun.Before(now) || nextRun.Equal(now) {
 
 			lockTime := time.Now() // Job locking
 
@@ -136,16 +138,18 @@ func (s *SchedulerServiceImpl) GetScheduledJobsInfo() ([]JobMonitoring, error) {
 
 	//  Loop dan hitung format data
 	for _, job := range jobs {
-		lastRunTime := time.Time{}
+		baseTime := time.Time{}
 		lastRunStr := ""
 
 		if job.LastRun != nil {
-			lastRunTime = *job.LastRun
+			baseTime = *job.LastRun
 			lastRunStr = job.LastRun.Format("02-01-2006 15:04")
+		} else {
+			baseTime = job.CreatedAt
 		}
 
 		//Next Run
-		nextRunTime := s.CalculateNextRun(job.ScheduleCron, lastRunTime)
+		nextRunTime := s.CalculateNextRun(job.ScheduleCron, baseTime)
 
 		// Pembuatan Format Outptu
 		mode := "Auto"
