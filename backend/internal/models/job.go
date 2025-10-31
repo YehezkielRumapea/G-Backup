@@ -8,6 +8,8 @@ type ScheduledJob struct {
 	UserID  uint   `gorm:"index;type:int unsigned;not null"`
 	JobName string `gorm:"column:job_name;size:100;not null"`
 
+	OperationMode string `gorm:"type:enum('BACKUP','RESTORE');not null;default:'BACKUP'"`
+
 	RcloneMode      string `gorm:"column:rclone_mode;type:enum('COPY','SYNC');not null"`
 	SourcePath      string `gorm:"size:255;not null"`
 	RemoteName      string `gorm:"size:100;not null"`

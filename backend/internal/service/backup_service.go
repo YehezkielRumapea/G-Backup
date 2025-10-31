@@ -134,13 +134,23 @@ func (s *backupServiceImpl) executeJobLifecycle(job models.ScheduledJob) {
 // buildRcloneArgs: Menyusun command Rclone
 func (s *backupServiceImpl) buildRcloneArgs(job models.ScheduledJob) []string {
 	// (Implementasi logic inversi path Restore/Backup di sini)
-	// ...
-	// Contoh sederhana:
+	isRestore := job.OperationMode == "RESTORE"
+	var SourcePath, Destination string
+	command := job.RcloneMode
+
+	if isRestore {
+		SourcePath = fmt.Sprintf("%s:%s", job.RemoteName, job.SourcePath)
+		Destination = job.DestinationPath
+		command = "copy"
+	} else {
+		SourcePath = job.SourcePath
+		Destination = fmt.Sprintf("%s:%s", job.RemoteName, job.DestinationPath)
+	}
 	args := []string{
 		"rclone",
-		job.RcloneMode,
-		job.SourcePath,
-		fmt.Sprintf("%s:%s", job.RemoteName, job.DestinationPath),
+		command,
+		SourcePath,
+		Destination,
 		"--checksum", // Flag keamanan
 	}
 	return args
