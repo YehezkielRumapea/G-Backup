@@ -53,6 +53,9 @@ func NewSchedulerService(jRepo repository.JobRepository, bSvc BackupService) Sch
 
 // CalculateNextRun: Menghitung waktu run job selanjutnya
 func (s *schedulerServiceImpl) CalculateNextRun(schedule string, lastRun time.Time) time.Time {
+	if schedule == "" {
+		return time.Time{} // Return waktu nol jika cron kosong
+	}
 	parser := cron.NewParser(
 		cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow,
 	)
@@ -79,6 +82,14 @@ func (s *schedulerServiceImpl) RunScheduledJobs() error {
 	now := time.Now()
 
 	for _, job := range jobs {
+
+		if job.ScheduleCron == "" {
+			// Job Manual hanya dipicu oleh TriggerManualJob (user/API).
+			// Abaikan sepenuhnya oleh loop scheduler otomatis.
+			fmt.Printf("[SCHEDULER] Job %d (%s) dilewati karena Job Manual (schedule kosong).\n", job.ID, job.JobName)
+			continue
+		}
+
 		// Tentukan Waktu Basis (Base Time)
 		var baseTime time.Time
 		if job.LastRun != nil {
@@ -111,7 +122,7 @@ func (s *schedulerServiceImpl) RunScheduledJobs() error {
 			fmt.Printf("[SCHEDULER] Dispatching Job %d (%s)\n", job.ID, job.JobName)
 
 			// Panggil BackupService (yang akan meluncurkan Goroutine Eksekusi 3 Fase)
-			s.BackupSvc.CreateJobAndDispatch(&job)
+			s.BackupSvc.TriggerManualJob(job.ID)
 		}
 	}
 	return nil

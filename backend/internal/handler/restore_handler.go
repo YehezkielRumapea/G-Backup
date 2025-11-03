@@ -56,7 +56,7 @@ func (h *RestoreHandler) TriggerRestore(c echo.Context) error {
 		// FLAG KRITIS: Memberitahu Service untuk membalik flow
 		OperationMode: "RESTORE",
 
-		RcloneMode:      "COPY",         // Restore selalu "copy"
+		RcloneMode:      "copy",         // Restore selalu "copy"
 		SourcePath:      req.SourcePath, // Path di Cloud
 		RemoteName:      req.RemoteName,
 		DestinationPath: req.DestinationPath, // Path di Lokal

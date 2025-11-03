@@ -10,7 +10,7 @@ type ScheduledJob struct {
 
 	OperationMode string `gorm:"type:enum('BACKUP','RESTORE');not null;default:'BACKUP'"`
 
-	RcloneMode      string `gorm:"column:rclone_mode;type:enum('COPY','SYNC');not null"`
+	RcloneMode      string `gorm:"column:rclone_mode;type:enum('copy','sync');not null"`
 	SourcePath      string `gorm:"size:255;not null"`
 	RemoteName      string `gorm:"size:100;not null"`
 	DestinationPath string `gorm:"size:255;not null"`
@@ -22,7 +22,7 @@ type ScheduledJob struct {
 	// Penjadwalan dan Status
 	ScheduleCron string     `gorm:"size:50;nullable"` // Boleh NULL
 	Priority     int        `gorm:"default:5"`
-	StatusQueue  string     `gorm:"type:enum('PENDING','RUNNING','COMPLETED','FAILED_PRE','FAILED_RCLONE','FAILED_POST');default:'PENDING'"`
+	StatusQueue  string     `gorm:"type:enum('PENDING','RUNNING','COMPLETED','FAIL_PRE_SCRIPT','FAIL_RCLONE','FAIL_POST_SCRIPT');default:'PENDING'"`
 	IsActive     bool       `gorm:"default:true"`
 	LastRun      *time.Time `gorm:"column:last_run_at;nullable"`
 

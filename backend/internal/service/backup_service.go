@@ -41,10 +41,11 @@ func (s *backupServiceImpl) CreateJobAndDispatch(job *models.ScheduledJob) error
 		fmt.Printf("[DISPATCHER] Job %s (Manual) disimpan (ID: %d) dan dipicu langsung.\n", job.JobName, job.ID)
 		// Memulai eksekusi di background (Goroutine)
 		go s.executeJobLifecycle(*job)
+		return nil
 		// Job Terjadwal (Auto Backup)
-		fmt.Printf("[DISPATCHER] Job %d (%s) disimpan untuk Scheduler.\n", job.ID, job.JobName)
+		// fmt.Printf("[DISPATCHER] Job %d (%s) disimpan untuk Scheduler.\n", job.ID, job.JobName)
 	}
-
+	fmt.Printf("[DISPATCHER] Job %d (%s) disimpan untuk Scheduler.\n", job.ID, job.JobName)
 	return nil
 }
 
@@ -176,5 +177,11 @@ func (s *backupServiceImpl) handleJobCompletion(job models.ScheduledJob, result 
 	if status == "SUCCESS" {
 		dbStatus = "COMPLETED"
 	}
+
+	if job.ScheduleCron == "" {
+		// Status PENDING/IDLE cocok untuk menunggu trigger manual berikutnya
+		dbStatus = "PENDING" // Atau "IDLE", tergantung konvensi Anda
+	}
+
 	s.JobRepo.UpdateLastRunStatus(job.ID, time.Now(), dbStatus)
 }
