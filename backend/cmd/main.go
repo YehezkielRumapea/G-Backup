@@ -6,15 +6,16 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	// Import semua package yang dibutuhkan
 	"gbackup-new/backend/internal/handler" // Dibutuhkan untuk AutoMigrate
 	"gbackup-new/backend/internal/repository"
 	"gbackup-new/backend/internal/service"
-	"gbackup-new/backend/middleware"
 	"gbackup-new/backend/pkg/database"
 
 	"github.com/joho/godotenv"
+	echojwt "github.com/labstack/echo-jwt/v4"
 	"github.com/labstack/echo/v4"
 	echomid "github.com/labstack/echo/v4/middleware"
 )
@@ -22,17 +23,41 @@ import (
 const DefaultAdminUsername = "admin"
 const DefaultAdminPassword = "admin123" // Ganti ini di produksi
 
+func loadDotEnv() {
+	exePath, err := os.Executable()
+	if err != nil {
+		fmt.Println("Tidak bisa dapatkan path executable:", err)
+		return
+	}
+	exeDir := filepath.Dir(exePath)
+
+	// Cari .env di: direktori binary, parent, dan parent’s parent
+	candidates := []string{
+		filepath.Join(exeDir, ".env"),
+		filepath.Join(exeDir, "..", ".env"),
+		filepath.Join(exeDir, "..", "..", ".env"),
+	}
+
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			if err := godotenv.Load(p); err == nil {
+				fmt.Println("Loaded .env dari:", p)
+				return
+			}
+		}
+	}
+
+	// fallback: coba relative ke CWD (kalau kebetulan cocok)
+	_ = godotenv.Load(".env", "../.env")
+}
 func main() {
 	// --- 1. MEMUAT .ENV ---
-	err := godotenv.Load(filepath.Join("..", "..", ".env")) // Path: backend/.env
-	if err != nil {
-		log.Fatal("KRITIS: Gagal memuat file .env di root /backend.")
-	}
+	loadDotEnv()
 
 	// Ambil Kunci Rahasia JWT (Wajib)
 	jwtSecretKey := os.Getenv("JWT_SECRET_KEY")
 	if jwtSecretKey == "" {
-		log.Fatal("FATAL: JWT_SECRET_KEY environment variable tidak diatur.")
+		log.Fatal("FATAL: JWT_SECRET_KEY ada")
 	}
 
 	// --- 2. KONEKSI DATABASE ---
@@ -51,7 +76,7 @@ func main() {
 	// remoteRepo := repository.NewRemoteRepository(dbInstance) // Untuk "Add Remote"
 
 	// 3.2. Inisialisasi Service (Lapisan Logika Bisnis)
-	authSvc := service.NewAuthService(userRepo)
+	authSvc := service.NewAuthService(userRepo, jwtSecretKey)
 	monitorSvc := service.NewMonitoringService(monitorRepo, logRepo)
 	backupSvc := service.NewBackupService(jobRepo, logRepo) // Orkestrator 3 Fase
 	schedulerSvc := service.NewSchedulerService(jobRepo, backupSvc)
@@ -91,7 +116,9 @@ func main() {
 
 	// Rute Privat (Dilindungi JWT)
 	r := e.Group("/api/v1")
-	r.Use(middleware.JWTGuard()) // Menerapkan Middleware JWT
+	r.Use(echojwt.WithConfig(echojwt.Config{
+		SigningKey: []byte(jwtSecretKey),
+	})) // Menerapkan Middleware JWT
 
 	// Rute Monitoring dan Logs
 	r.GET("/monitoring/remotes", monitorHandler.GetRemoteStatusList)
@@ -112,6 +139,29 @@ func main() {
 	// --- 7. START DAEMONS (Goroutines) ---
 	schedulerSvc.StartDaemon() // Memulai CRON Daemon
 	// (Tambahkan Goroutine untuk auto-update monitoring jika perlu)
+
+	go func() {
+		time.Sleep(2 * time.Second)
+		fmt.Println("Inisialisasi status remote monitoring...")
+
+		// Ambil remote dan rclone.conf
+		remoteNames, err := monitorSvc.GetRcloneConfiguredRemotes()
+		if err != nil {
+			fmt.Printf("Gagal mendapatkan remote dari rclone: %v\n", err)
+			return
+		}
+
+		if len(remoteNames) == 0 {
+			fmt.Println("Tidak ada remote yang dikonfigurasi di rclone.")
+			return
+		}
+
+		fmt.Println("Status Remote yang terdeteksi dari rclone akan dimasukan ke DB:", remoteNames)
+		for _, name := range remoteNames {
+			monitorSvc.UpdateRemoteStatus(name)
+		}
+		fmt.Println("Inisialisasi status remote monitoring selesai.")
+	}()
 
 	fmt.Println("\nBackend diinisialisasi. Menjalankan Echo server di port 8080")
 	e.Logger.Fatal(e.Start(":8080"))

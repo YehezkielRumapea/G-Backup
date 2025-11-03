@@ -2,8 +2,6 @@ package service
 
 import (
 	"fmt"
-	"log"
-	"os"
 	"time"
 
 	"gbackup-new/backend/internal/models"
@@ -13,15 +11,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-var jwtSecretKey string
-
+var jwtSecretKey string // Global variable
 // init() dijalankan saat package service di-load
-func init() {
-	jwtSecretKey = os.Getenv("JWT_SECRET_KEY") // Diambil dari .env
-	if jwtSecretKey == "" {
-		log.Fatal("FATAL: JWT_SECRET_KEY environment variable tidak diatur.")
-	}
-}
 
 // Struct untuk payload login
 type LoginRequest struct {
@@ -37,12 +28,16 @@ type AuthService interface {
 
 // authServiceImpl: Struct implementasi
 type authServiceImpl struct {
-	UserRepo repository.UserRepository
+	UserRepo  repository.UserRepository
+	SecretKey string
 }
 
 // NewAuthService: Constructor untuk Dependency Injection
-func NewAuthService(uRepo repository.UserRepository) AuthService {
-	return &authServiceImpl{UserRepo: uRepo}
+func NewAuthService(uRepo repository.UserRepository, secretKey string) AuthService {
+	return &authServiceImpl{
+		UserRepo:  uRepo,
+		SecretKey: secretKey, // Kunci disimpan saat inisialisasi service
+	}
 }
 
 // ----------------------------------------------------
@@ -51,7 +46,9 @@ func NewAuthService(uRepo repository.UserRepository) AuthService {
 
 // Authenticate: Memverifikasi user dan menghasilkan JWT.
 func (s *authServiceImpl) Authenticate(req *LoginRequest) (string, error) {
-	// 1. Panggil Repository (yang baru kita buat)
+	// HAPUS BARIS SALAH: s.secretkey = key
+
+	// Cari user di DB
 	user, err := s.UserRepo.FindByUsername(req.Username)
 	if err != nil {
 		return "", fmt.Errorf("error database saat mencari user: %w", err)
@@ -60,22 +57,23 @@ func (s *authServiceImpl) Authenticate(req *LoginRequest) (string, error) {
 		return "", fmt.Errorf("kredensial tidak valid (user tidak ditemukan)")
 	}
 
-	// 2. Verifikasi Password (Bcrypt)
+	// Verifikasi password
 	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password))
 	if err != nil {
 		return "", fmt.Errorf("kredensial tidak valid (password salah)")
 	}
 
-	// 3. Generate JWT
+	// Generate JWT
 	claims := jwt.MapClaims{
 		"user_id":  user.ID,
 		"username": user.Username,
-		"exp":      time.Now().Add(time.Hour * 72).Unix(), // Berlaku 72 jam
+		"exp":      time.Now().Add(time.Hour * 72).Unix(),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	signedToken, err := token.SignedString([]byte(jwtSecretKey))
+	// FIX: Gunakan s.SecretKey yang sudah di-inject
+	signedToken, err := token.SignedString([]byte(s.SecretKey))
 	if err != nil {
 		return "", fmt.Errorf("gagal menandatangani token JWT: %w", err)
 	}
