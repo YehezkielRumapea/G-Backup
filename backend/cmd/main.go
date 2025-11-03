@@ -107,7 +107,7 @@ func main() {
 	r.POST("/jobs/restore", restoreHandler.TriggerRestore) // Create Restore
 
 	// Rute Konfigurasi
-	r.POST("/remotes/new", remoteHandler.AddNewRemote) // Add New Remote
+	// r.POST("/remotes/new", remoteHandler.AddNewRemote) // Add New Remote
 
 	// --- 7. START DAEMONS (Goroutines) ---
 	schedulerSvc.StartDaemon() // Memulai CRON Daemon
