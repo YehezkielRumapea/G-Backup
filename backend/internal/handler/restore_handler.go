@@ -15,8 +15,7 @@ type RestoreRequestDTO struct {
 	JobName         string `json:"job_name" validate:"required"`
 	SourcePath      string `json:"source_path" validate:"required"` // Path file di Cloud
 	RemoteName      string `json:"remote_name" validate:"required"`
-	DestinationPath string `json:"destination_path" validate:"required"` // Path Lokal Target
-	RcloneMode      string `json:"rclone_mode"`                          // "COPY" (Default)
+	DestinationPath string `json:"destination_path" validate:"required"` // Path Lokal Target                         // "COPY" (Default)
 
 	// Script Mentah (Opsional untuk Restore)
 	PreScript  string `json:"pre_script"`

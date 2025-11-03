@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"gbackup-new/backend/internal/models"
 	"gbackup-new/backend/internal/repository"
+	"strings"
 	"time"
 )
 
@@ -137,7 +138,7 @@ func (s *backupServiceImpl) buildRcloneArgs(job models.ScheduledJob) []string {
 	// (Implementasi logic inversi path Restore/Backup di sini)
 	isRestore := job.OperationMode == "RESTORE"
 	var SourcePath, Destination string
-	command := job.RcloneMode
+	command := strings.ToLower(job.RcloneMode)
 
 	if isRestore {
 		SourcePath = fmt.Sprintf("%s:%s", job.RemoteName, job.SourcePath)

@@ -80,6 +80,7 @@ func main() {
 	monitorSvc := service.NewMonitoringService(monitorRepo, logRepo)
 	backupSvc := service.NewBackupService(jobRepo, logRepo) // Orkestrator 3 Fase
 	schedulerSvc := service.NewSchedulerService(jobRepo, backupSvc)
+	browserSvc := service.NewBrowserService()
 	// remoteSvc := service.NewRemoteService(remoteRepo) // Service "Add Remote"
 
 	// 3.3. Inisialisasi Handler (Controller Layer)
@@ -88,6 +89,7 @@ func main() {
 	jobHandler := handler.NewJobHandler(schedulerSvc, backupSvc) // Membutuhkan BackupSvc untuk TriggerManual
 	backupHandler := handler.NewBackupHandler(backupSvc)
 	restoreHandler := handler.NewRestoreHandler(backupSvc)
+	browserHandler := handler.NewBrowserHandler(browserSvc)
 	// remoteHandler := handler.NewRemoteHandler(remoteSvc)
 
 	// --- 4. SEEDING ADMIN AWAL ---
@@ -132,6 +134,7 @@ func main() {
 	// Rute Aksi
 	r.POST("/jobs/new", backupHandler.CreateNewJob)        // Create Backup (Manual/Auto)
 	r.POST("/jobs/restore", restoreHandler.TriggerRestore) // Create Restore
+	r.POST("/browser/list", browserHandler.ListFiles)
 
 	// Rute Konfigurasi
 	// r.POST("/remotes/new", remoteHandler.AddNewRemote) // Add New Remote
