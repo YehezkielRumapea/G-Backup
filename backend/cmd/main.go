@@ -134,7 +134,7 @@ func main() {
 	// Rute Aksi
 	r.POST("/jobs/new", backupHandler.CreateNewJob)        // Create Backup (Manual/Auto)
 	r.POST("/jobs/restore", restoreHandler.TriggerRestore) // Create Restore
-	r.POST("/browser/list", browserHandler.ListFiles)
+	r.GET("/browser/list", browserHandler.ListFiles)
 
 	// Rute Konfigurasi
 	// r.POST("/remotes/new", remoteHandler.AddNewRemote) // Add New Remote

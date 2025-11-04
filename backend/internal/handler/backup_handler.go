@@ -51,12 +51,16 @@ func (h *BackupHandler) CreateNewJob(c echo.Context) error {
 	// (Di implementasi nyata, ambil dari context: userID := c.Get("userID").(uint))
 	userID := uint(1) // Placeholder untuk admin tunggal
 
+	rcloneMode := req.RcloneMode
+	if rcloneMode != "COPY" && rcloneMode != "SYNC" {
+		rcloneMode = "COPY"
+	}
 	// 3. Buat Struct Job (Model) dari DTO
 	// (Kita set OperationMode default ke BACKUP)
 	newJob := models.ScheduledJob{
 		UserID:          userID,
 		JobName:         req.JobName,
-		RcloneMode:      req.RcloneMode,
+		RcloneMode:      rcloneMode,
 		SourcePath:      req.SourcePath,
 		RemoteName:      req.RemoteName,
 		DestinationPath: req.DestinationPath,
