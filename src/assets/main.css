@@ -1,0 +1,33 @@
+/* FONT GLOBAL */
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
+
+/* VARIABEL WARNA GLOBAL */
+:root {
+  --primary-color: #248af7;
+  --primary-hover: #0056b3;
+  --sidebar-bg: #343a40;
+  --sidebar-text: #adb5bd;
+  --sidebar-active: #ffffff;
+  --sidebar-link-hover: #495057;
+  --header-bg: #f8f9fa;
+  --card-bg: #ffffff;
+  --border-color: #dee2e6;
+  --body-bg: #e9ecef;
+}
+
+/* RESET CSS DASAR */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Roboto', sans-serif;
+}
+
+body {
+  background-color: var(--body-bg);
+  color: #333;
+}
+
+#app {
+  min-height: 100vh;
+}
