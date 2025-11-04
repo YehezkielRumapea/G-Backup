@@ -1,6 +1,0 @@
-*.exe
-*.bin
-*.test
-vendor/
-.env
-backend_app
