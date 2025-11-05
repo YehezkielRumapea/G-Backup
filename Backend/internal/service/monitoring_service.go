@@ -14,7 +14,8 @@ type MonitoringService interface {
 	UpdateRemoteStatus(remoteName string) error
 	GetRemoteStatusList() ([]models.Monitoring, error)
 	GetRcloneConfiguredRemotes() ([]string, error) // Untuk Startup Discovery
-	GetJobLogs() ([]models.Log, error)             // Untuk UI Logs
+	GetJobLogs() ([]models.Log, error)
+	DiscoverAndSaveRemote() error // Untuk UI Logs
 }
 
 // monitoringServiceImpl adalah struct implementasi
@@ -110,4 +111,30 @@ func (s *monitoringServiceImpl) GetRcloneConfiguredRemotes() ([]string, error) {
 // GetJobLogs: Mengambil riwayat log dari LogRepository
 func (s *monitoringServiceImpl) GetJobLogs() ([]models.Log, error) {
 	return s.LogRepo.FindAllLogs()
+}
+
+func (s *monitoringServiceImpl) DiscoverAndSaveRemote() error {
+	remoteNames, err := s.GetRcloneConfiguredRemotes()
+	if err != nil {
+		return fmt.Errorf("gagal mengambil remote")
+	}
+
+	for _, name := range remoteNames {
+		monitor := &models.Monitoring{
+			RemoteName:    name,
+			StatusConnect: "DISCONNECTED",
+			LastCheckedAt: time.Now(),
+		}
+
+		if err := s.MonitorRepo.UpsertRemoteStatus(monitor); err != nil {
+			return fmt.Errorf("gagal menyimpan remote %s ke DB: %w", name, err)
+		}
+	}
+
+	for _, name := range remoteNames {
+		// Jalankan di Goroutine agar tidak memblokir startup
+		go s.UpdateRemoteStatus(name)
+	}
+	fmt.Printf("[MONITORING] Berhasil menemukan dan menyimpan %d remote.\n", len(remoteNames))
+	return nil
 }

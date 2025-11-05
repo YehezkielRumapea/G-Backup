@@ -148,20 +148,9 @@ func main() {
 		fmt.Println("Inisialisasi status remote monitoring...")
 
 		// Ambil remote dan rclone.conf
-		remoteNames, err := monitorSvc.GetRcloneConfiguredRemotes()
-		if err != nil {
-			fmt.Printf("Gagal mendapatkan remote dari rclone: %v\n", err)
+		if err := monitorSvc.DiscoverAndSaveRemote(); err != nil {
+			fmt.Printf("❌ ERROR: Gagal melakukan Remote Discovery dan Inisialisasi: %v\n", err)
 			return
-		}
-
-		if len(remoteNames) == 0 {
-			fmt.Println("Tidak ada remote yang dikonfigurasi di rclone.")
-			return
-		}
-
-		fmt.Println("Status Remote yang terdeteksi dari rclone akan dimasukan ke DB:", remoteNames)
-		for _, name := range remoteNames {
-			monitorSvc.UpdateRemoteStatus(name)
 		}
 		fmt.Println("Inisialisasi status remote monitoring selesai.")
 	}()

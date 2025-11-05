@@ -5,7 +5,6 @@ import (
 	"gbackup-new/backend/internal/models"
 	"gbackup-new/backend/internal/service"
 	"net/http"
-	"strings"
 	"time" // Diperlukan untuk auto-generate JobName
 
 	"github.com/labstack/echo/v4"
@@ -45,8 +44,8 @@ func (h *RestoreHandler) TriggerRestore(c echo.Context) error {
 		// Auto-generate nama Job (karena user tidak input)
 		JobName: fmt.Sprintf("Manual Restore - %d", time.Now().Unix()),
 
-		OperationMode:   strings.ToUpper(req.OperationMode), // Flag Kritis
-		RcloneMode:      "copy",                             // Restore selalu "copy"
+		OperationMode:   "RESTORE", // Flag Kritis
+		RcloneMode:      "copy",    // Restore selalu "copy"
 		SourcePath:      req.SourcePath,
 		RemoteName:      req.RemoteName,
 		DestinationPath: req.DestinationPath,
