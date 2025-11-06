@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"gbackup-new/backend/internal/repository"
 	"gbackup-new/backend/internal/service" // Sesuaikan path module
 
 	"github.com/labstack/echo/v4"
@@ -22,11 +23,17 @@ type RemoteStatusResponse struct {
 // MonitoringHandler struct menampung dependency
 type MonitoringHandler struct {
 	MonitoringSvc service.MonitoringService
+	SchedulerSvc  service.SchedulerService
+	LogRepo       repository.LogRepository
 }
 
 // NewMonitoringHandler adalah constructor (Factory)
-func NewMonitoringHandler(svc service.MonitoringService) *MonitoringHandler {
-	return &MonitoringHandler{MonitoringSvc: svc}
+func NewMonitoringHandler(mSvc service.MonitoringService, sSvc service.SchedulerService, lRepo repository.LogRepository) *MonitoringHandler {
+	return &MonitoringHandler{
+		MonitoringSvc: mSvc,
+		SchedulerSvc:  sSvc,
+		LogRepo:       lRepo,
+	}
 }
 
 // ----------------------------------------------------
@@ -77,4 +84,12 @@ func (h *MonitoringHandler) GetJobLogs(c echo.Context) error {
 
 	// 2. Kirim Logs
 	return c.JSON(http.StatusOK, logs)
+}
+
+func (h *MonitoringHandler) GetScheduledJobs(c echo.Context) error {
+	jobsDTO, err := h.SchedulerSvc.GetScheduledJobsInfo()
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "gagal mengambil daftar jobs" + err.Error()})
+	}
+	return c.JSON(http.StatusOK, jobsDTO)
 }

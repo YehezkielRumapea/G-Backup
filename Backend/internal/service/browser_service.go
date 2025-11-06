@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	// Sesuaikan path module
 )
 
@@ -30,7 +31,8 @@ func NewBrowserService() BrowserService {
 // ListFiles: Menjalankan 'rclone lsjson'
 func (s *browserServiceImpl) ListFiles(remoteName string, path string) ([]RcloneFile, error) {
 	// 1. Generate command
-	fullPath := fmt.Sprintf("%s:%s", remoteName, path)
+	CleanPath := strings.TrimPrefix(path, "/")
+	fullPath := fmt.Sprintf("%s:%s", remoteName, CleanPath)
 	// rclone lsjson [remote:path]
 	args := []string{"rclone", "lsjson", fullPath, "--no-mimetype", "--no-modtime-accuracy"}
 

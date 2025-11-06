@@ -79,6 +79,16 @@ func (s *monitoringServiceImpl) UpdateRemoteStatus(remoteName string) error {
 	monitor.UsedStorageGB = float64(rcloneData.Used) / BytesToGB
 	monitor.FreeStorageGB = float64(rcloneData.Free) / BytesToGB
 
+	usedPercentage := (monitor.UsedStorageGB / monitor.TotalStorageGB) * 100
+	const WarningThreshold = 85.0
+
+	// Early warn
+	if usedPercentage >= WarningThreshold {
+		monitor.SystemMessage = fmt.Sprintf("PERINGATAN: Storage terisi %.1f%%. Ruang kritis!", usedPercentage)
+	} else if monitor.SystemMessage != "" {
+		monitor.SystemMessage = ""
+
+	}
 	// 5. Update Database (melalui Repository Upsert)
 	return s.MonitorRepo.UpsertRemoteStatus(monitor)
 }
@@ -137,4 +147,8 @@ func (s *monitoringServiceImpl) DiscoverAndSaveRemote() error {
 	}
 	fmt.Printf("[MONITORING] Berhasil menemukan dan menyimpan %d remote.\n", len(remoteNames))
 	return nil
+}
+
+func (s *monitoringServiceImpl) FindByRemoteName(remoteName string) (*models.Monitoring, error) {
+	return s.MonitorRepo.FindByName(remoteName)
 }

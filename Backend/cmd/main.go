@@ -85,7 +85,7 @@ func main() {
 
 	// 3.3. Inisialisasi Handler (Controller Layer)
 	authHandler := handler.NewAuthHandler(authSvc)
-	monitorHandler := handler.NewMonitoringHandler(monitorSvc)
+	monitorHandler := handler.NewMonitoringHandler(monitorSvc, schedulerSvc, logRepo)
 	jobHandler := handler.NewJobHandler(schedulerSvc, backupSvc) // Membutuhkan BackupSvc untuk TriggerManual
 	backupHandler := handler.NewBackupHandler(backupSvc)
 	restoreHandler := handler.NewRestoreHandler(backupSvc)
@@ -125,6 +125,7 @@ func main() {
 	// Rute Monitoring dan Logs
 	r.GET("/monitoring/remotes", monitorHandler.GetRemoteStatusList)
 	r.GET("/monitoring/logs", monitorHandler.GetJobLogs)
+	r.GET("/monitoring/jobs", monitorHandler.GetScheduledJobs)
 
 	// Rute Job Management (Create, List, Trigger)
 	r.GET("/jobs/scheduled", jobHandler.GetScheduledJobs)    // List Job Monitoring

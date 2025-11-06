@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"gbackup-new/backend/internal/models"
 	"gbackup-new/backend/internal/repository"
+	"os"
 	"strings"
 	"time"
 )
@@ -15,13 +16,20 @@ type BackupService interface {
 }
 
 type backupServiceImpl struct {
-	JobRepo repository.JobRepository
-	LogRepo repository.LogRepository
+	MonitorRepo repository.MonitoringRepository
+	JobRepo     repository.JobRepository
+	LogRepo     repository.LogRepository
+	MonitorSvc  MonitoringService
 }
 
 func NewBackupService(jRepo repository.JobRepository, lRepo repository.LogRepository) BackupService {
-	return &backupServiceImpl{JobRepo: jRepo, LogRepo: lRepo}
+	return &backupServiceImpl{
+		JobRepo: jRepo,
+		LogRepo: lRepo,
+	}
 }
+
+const MinFreeGB = 1.0
 
 // ----------------------------------------------------
 // FUNGSI UTAMA ORKESTRASI & DISPATCH
@@ -85,6 +93,33 @@ func (s *backupServiceImpl) executeJobLifecycle(job models.ScheduledJob) {
 
 	var finalResult RcloneResult
 	var finalStatus string
+
+	// 🚨 LANGKAH PENCEGAHAN (Hanya untuk Job Terjadwal) 🚨
+	if job.OperationMode == "BACKUP" && job.ScheduleCron != "" {
+		const MinFreeGB = 1.0 // Batas aman yang dibutuhkan
+
+		// 1. Dapatkan status remote
+		monitor, err := s.MonitorRepo.FindRemoteByName(job.RemoteName)
+		if err == nil && monitor != nil {
+
+			// 2. Hitung/Estimasi ukuran sumber
+			sourceSizeGB, _ := s.CalculateSourceSizeGB(job.SourcePath)
+			requiredSpace := sourceSizeGB + MinFreeGB
+
+			// 3. Bandingkan dan SUSPEND
+			if monitor.FreeStorageGB < requiredSpace {
+				errorMsg := fmt.Sprintf("⛔ Job ditangguhkan: Ruang di %s (%.2f GB) tidak cukup untuk data ini (%.2f GB).",
+					job.RemoteName, monitor.FreeStorageGB, requiredSpace)
+
+				// Catat kegagalan dan SUSPEND Job
+				s.handleJobCompletion(job, RcloneResult{Success: false, ErrorMsg: errorMsg}, "FAIL_STORAGE")
+				s.JobRepo.UpdateJobActivity(job.ID, false) // ✅ SUSPEND JOB
+				fmt.Printf("⛔ [WORKER %d] Job Terjadwal DITANGGUHKAN karena ruang penuh.\n", job.ID)
+				return
+			}
+		}
+		// Jika gagal mendapatkan status monitor, biarkan Job berjalan (risiko kecil).
+	}
 
 	// --- FASE 1: PRE-SCRIPT ---
 	if job.PreScript != "" {
@@ -201,4 +236,13 @@ func (s *backupServiceImpl) handleJobCompletion(job models.ScheduledJob, result 
 	}
 
 	s.JobRepo.UpdateLastRunStatus(job.ID, time.Now(), dbStatus)
+}
+
+func (s *backupServiceImpl) CalculateSourceSizeGB(path string) (float64, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0, fmt.Errorf("gagal stat path %s: %w", path, err)
+	}
+	const BytesToGB = 1073741824.0
+	return float64(info.Size()) / BytesToGB, nil
 }
