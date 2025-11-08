@@ -16,8 +16,9 @@ type RemoteStatusResponse struct {
 	Status         string  `json:"status_connect"`
 	StorageUsedGB  float64 `json:"used_storage_gb"`
 	StorageTotalGB float64 `json:"total_storage_gb"`
+	FreeStorageGB  float64 `json:"free_storage_gb"`
 	LastChecked    string  `json:"last_checked_at"`
-	JobRuns        int     `json:"job_runs"` // Placeholder (Akan diisi oleh Service)
+	ActiveJobCount int64   `json:"active_job_count"` // Placeholder (Akan diisi oleh Service)
 }
 
 // MonitoringHandler struct menampung dependency
@@ -60,9 +61,10 @@ func (h *MonitoringHandler) GetRemoteStatusList(c echo.Context) error {
 			Name:           r.RemoteName,
 			Status:         r.StatusConnect,
 			StorageUsedGB:  r.UsedStorageGB,
+			FreeStorageGB:  r.FreeStorageGB,
 			StorageTotalGB: r.TotalStorageGB,
 			LastChecked:    r.LastCheckedAt.Format(time.RFC3339),
-			JobRuns:        0, // Placeholder
+			ActiveJobCount: r.ActiveJobCount, // Placeholder
 		})
 	}
 

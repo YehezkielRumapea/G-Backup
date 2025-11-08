@@ -22,11 +22,16 @@ type MonitoringService interface {
 type monitoringServiceImpl struct {
 	MonitorRepo repository.MonitoringRepository
 	LogRepo     repository.LogRepository // Dependency untuk GetJobLogs
+	JobRepo     repository.JobRepository
 }
 
 // NewMonitoringService adalah constructor untuk DI
-func NewMonitoringService(mRepo repository.MonitoringRepository, lRepo repository.LogRepository) MonitoringService {
-	return &monitoringServiceImpl{MonitorRepo: mRepo, LogRepo: lRepo}
+func NewMonitoringService(mRepo repository.MonitoringRepository, lRepo repository.LogRepository, jRepo repository.JobRepository) MonitoringService {
+	return &monitoringServiceImpl{
+		MonitorRepo: mRepo,
+		LogRepo:     lRepo,
+		JobRepo:     jRepo,
+	}
 }
 
 // ----------------------------------------------------
@@ -44,6 +49,14 @@ func (s *monitoringServiceImpl) UpdateRemoteStatus(remoteName string) error {
 	monitor := &models.Monitoring{
 		RemoteName:    remoteName,
 		LastCheckedAt: time.Now(),
+	}
+
+	count, errJob := s.JobRepo.CountJobOnRemote(remoteName)
+	if errJob != nil {
+		fmt.Printf("gagal menghitung job pada remote %s: %v\n", remoteName, errJob)
+		monitor.ActiveJobCount = 0
+	} else {
+		monitor.ActiveJobCount = count
 	}
 
 	if !result.Success {
@@ -95,7 +108,17 @@ func (s *monitoringServiceImpl) UpdateRemoteStatus(remoteName string) error {
 
 // GetRemoteStatusList: Mengambil data status dari DB untuk UI
 func (s *monitoringServiceImpl) GetRemoteStatusList() ([]models.Monitoring, error) {
-	return s.MonitorRepo.FindAllRemotes()
+	remotes, err := s.MonitorRepo.FindAllRemotes()
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range remotes {
+		count, _ := s.JobRepo.CountJobOnRemote(remotes[i].RemoteName)
+		remotes[i].ActiveJobCount = count
+	}
+
+	return remotes, nil
 }
 
 // GetRcloneConfiguredRemotes: Mengambil daftar remote dari rclone.conf (Untuk Startup Discovery)
@@ -150,5 +173,5 @@ func (s *monitoringServiceImpl) DiscoverAndSaveRemote() error {
 }
 
 func (s *monitoringServiceImpl) FindByRemoteName(remoteName string) (*models.Monitoring, error) {
-	return s.MonitorRepo.FindByName(remoteName)
+	return s.MonitorRepo.FindRemoteByName(remoteName)
 }

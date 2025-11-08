@@ -22,10 +22,17 @@ type backupServiceImpl struct {
 	MonitorSvc  MonitoringService
 }
 
-func NewBackupService(jRepo repository.JobRepository, lRepo repository.LogRepository) BackupService {
+func NewBackupService(
+	jRepo repository.JobRepository,
+	lRepo repository.LogRepository,
+	mRepo repository.MonitoringRepository,
+	mSvc MonitoringService,
+) BackupService {
 	return &backupServiceImpl{
-		JobRepo: jRepo,
-		LogRepo: lRepo,
+		JobRepo:     jRepo,
+		LogRepo:     lRepo,
+		MonitorRepo: mRepo,
+		MonitorSvc:  mSvc,
 	}
 }
 

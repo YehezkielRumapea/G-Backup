@@ -77,8 +77,8 @@ func main() {
 
 	// 3.2. Inisialisasi Service (Lapisan Logika Bisnis)
 	authSvc := service.NewAuthService(userRepo, jwtSecretKey)
-	monitorSvc := service.NewMonitoringService(monitorRepo, logRepo)
-	backupSvc := service.NewBackupService(jobRepo, logRepo) // Orkestrator 3 Fase
+	monitorSvc := service.NewMonitoringService(monitorRepo, logRepo, jobRepo)
+	backupSvc := service.NewBackupService(jobRepo, logRepo, monitorRepo, monitorSvc) // Orkestrator 3 Fase
 	schedulerSvc := service.NewSchedulerService(jobRepo, backupSvc)
 	browserSvc := service.NewBrowserService()
 	// remoteSvc := service.NewRemoteService(remoteRepo) // Service "Add Remote"

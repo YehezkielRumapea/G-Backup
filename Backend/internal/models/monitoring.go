@@ -12,4 +12,5 @@ type Monitoring struct {
 	UsedStorageGB  float64   `gorm:"column:used_storage_gb;default:0"`
 	FreeStorageGB  float64   `gorm:"column:free_storage_gb;default:0"`
 	LastCheckedAt  time.Time `gorm:"column:last_checked_at"`
+	ActiveJobCount int64     `gorm:"default:0"`
 }

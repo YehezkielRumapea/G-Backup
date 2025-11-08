@@ -80,9 +80,12 @@ func (r *jobRepositoryImpl) CountJobOnRemote(remoteName string) (int64, error) {
 	var count int64
 
 	err := r.DB.Model(&models.ScheduledJob{}).
-		Where("remote_name = ? AND schedule_cron != ? AND is_active = ?",
-			remoteName, "", true).
+		Where("remote_name = ?", remoteName).
+		Where("schedule_cron IS NOT NULL").
+		Where("schedule_cron != ''").
+		Where("is_active = ?", true).
 		Count(&count).Error
+	fmt.Printf("[DEBUG REPO] Menerima remoteName: '%s'\n", remoteName)
 
 	if err != nil {
 		// Log error atau tangani sesuai kebijakan aplikasi
