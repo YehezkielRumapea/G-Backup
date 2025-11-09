@@ -17,8 +17,7 @@ type BackupRequestDTO struct {
 	SourcePath      string `json:"source_path" validate:"required"` // Path yang akan digunakan Rclone
 	RemoteName      string `json:"remote_name" validate:"required"`
 	DestinationPath string `json:"destination_path" validate:"required"`
-	RcloneMode      string `json:"rclone_mode" validate:"required"` // "COPY" atau "SYNC"
-	ScheduleCron    string `json:"schedule_cron"`                   // Kosong jika Manual
+	ScheduleCron    string `json:"schedule_cron"` // Kosong jika Manual
 
 	// Script Mentah dari User
 	PreScript  string `json:"pre_script"`
@@ -51,10 +50,7 @@ func (h *BackupHandler) CreateNewJob(c echo.Context) error {
 	// (Di implementasi nyata, ambil dari context: userID := c.Get("userID").(uint))
 	userID := uint(1) // Placeholder untuk admin tunggal
 
-	rcloneMode := req.RcloneMode
-	if rcloneMode != "COPY" && rcloneMode != "SYNC" {
-		rcloneMode = "COPY"
-	}
+	rcloneMode := "COPY"
 	// 3. Buat Struct Job (Model) dari DTO
 	// (Kita set OperationMode default ke BACKUP)
 	newJob := models.ScheduledJob{
