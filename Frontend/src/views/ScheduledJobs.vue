@@ -21,7 +21,6 @@
           <th>Nama Job</th>
           <th>Tipe</th>
           <th>Target GDrive</th>
-          <th>Mode</th>
           <th>Last Run</th>
           <th>Status</th>
           <th>Next Run</th>

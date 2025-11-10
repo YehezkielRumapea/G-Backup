@@ -3,7 +3,6 @@
     <td><strong>{{ job.job_name }}</strong></td>
     <td>{{ job.type }}</td>
     <td>{{ job.gdrive_target }}</td>
-    <td>{{ job.mode }}</td>
     <td>{{ job.last_run || 'N/A' }}</td>
     <td>
       <span class="status" :class="job.status.toLowerCase()">
@@ -14,12 +13,12 @@
     
     <td>
       <div class="actions">
-        <button @click="$emit('trigger', job.id)" class="action-btn play" title="Run Now">
+        <!-- <button @click="$emit('trigger', job.id)" class="action-btn play" title="Run Now">
           ▶
         </button>
         <button @click="$emit('view-script', job.id)" class="action-btn view" title="View Script">
           (i)
-        </button>
+        </button> -->
         <button @click="handleDelete" class="action-btn delete" title="Delete">
           🗑
         </button>
@@ -74,6 +73,9 @@ function handleDelete() {
   padding: 5px;
 }
 .action-btn.play { color: #f39c12; }
-.action-btn.delete { color: #e74c3c; }
+.action-btn.delete { 
+  color: #e74c3c;
+  padding-left: 26px; 
+}
 .action-btn.view { color: #3498db; font-weight: bold; }
 </style>
