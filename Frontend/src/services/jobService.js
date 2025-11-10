@@ -56,6 +56,17 @@ export default {
    * @param {number} jobId - ID dari Job.
    * @returns {Promise<object>} Object berisi "script_preview".
    */
+
+  async getManualJobs() { // ✅ BENAR: Shorthand untuk method dalam object
+  try {
+   const response = await apiClient.get('/jobs/manual');
+   return response.data;
+  } catch (error) {
+        console.error("Error fetching manual jobs:", error);
+        throw error;
+    }
+ },
+
   async getJobScript(jobId) {
     try {
       const response = await apiClient.get(`/jobs/script/${jobId}`)

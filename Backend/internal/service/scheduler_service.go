@@ -5,6 +5,7 @@ import (
 	"time"
 
 	// Sesuaikan path module
+
 	"gbackup-new/backend/internal/repository" // Sesuaikan path module
 
 	"github.com/robfig/cron/v3"
@@ -30,6 +31,7 @@ type SchedulerService interface {
 	CalculateNextRun(schedule string, lastRun time.Time) time.Time
 	GetScheduledJobsInfo() ([]JobMonitoringDTO, error)
 	GetGeneratedScript(jobID uint) (string, error) // Untuk Pratinjau Script
+	GetManualJob() ([]JobMonitoringDTO, error)
 }
 
 // Implementasi Struct
@@ -228,4 +230,35 @@ func (s *schedulerServiceImpl) GetGeneratedScript(jobID uint) (string, error) {
 
 	return scriptHeader + preScript + rcloneCmdStr + postScript, nil
 
+}
+
+func (s *schedulerServiceImpl) GetManualJob() ([]JobMonitoringDTO, error) {
+	jobs, err := s.JobRepo.FindManualJob()
+	if err != nil {
+		return nil, fmt.Errorf("gagal mengambil job manual: %w", err)
+	}
+
+	var output []JobMonitoringDTO
+	for _, job := range jobs {
+		lastRunstr := ""
+		if job.LastRun != nil {
+			lastRunstr = job.LastRun.Format("02-01-2006 15:04")
+		}
+		mode := "manual"
+
+		jobTypeFormatted := fmt.Sprintf("%s: %s", job.RcloneMode, job.SourcePath)
+
+		output = append(output, JobMonitoringDTO{
+			ID:           job.ID,
+			JobName:      job.JobName,
+			Type:         jobTypeFormatted,
+			GdriveTarget: job.RemoteName,
+			Mode:         mode,
+			LastRun:      lastRunstr,
+			Status:       job.StatusQueue,
+			NextRun:      "N/A",
+			FullScript:   "N/A",
+		})
+	}
+	return output, nil
 }

@@ -80,3 +80,13 @@ func (h *JobHandler) TriggerManualJob(c echo.Context) error {
 
 	return c.JSON(http.StatusAccepted, map[string]string{"message": "Job berhasil dipicu."})
 }
+
+func (h *JobHandler) GetManualJob(c echo.Context) error {
+	jobsDTO, err := h.SchedulerSvc.GetManualJob()
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "Gagal mengambil daftar Job Manual: " + err.Error(),
+		})
+	}
+	return c.JSON(http.StatusOK, jobsDTO)
+}

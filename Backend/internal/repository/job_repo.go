@@ -14,6 +14,7 @@ type JobRepository interface {
 	Create(job *models.ScheduledJob) error
 	FindJobByID(jobID uint) (*models.ScheduledJob, error)
 	FindAllActiveJobs() ([]models.ScheduledJob, error)
+	FindManualJob() ([]models.ScheduledJob, error)
 	UpdateLastRunStatus(jobID uint, lastRunTime time.Time, status string) error
 	UpdateJobActivity(JobID uint, isActive bool) error
 	CountJobOnRemote(remoteName string) (int64, error)
@@ -93,4 +94,13 @@ func (r *jobRepositoryImpl) CountJobOnRemote(remoteName string) (int64, error) {
 	}
 
 	return count, nil
+}
+
+func (r *jobRepositoryImpl) FindManualJob() ([]models.ScheduledJob, error) {
+	var jobs []models.ScheduledJob
+	result := r.DB.Where("schedule_cron IS NULL OR schedule_cron = ?", "").Find(&jobs)
+	if result.Error != nil && result.Error != gorm.ErrRecordNotFound {
+		return nil, result.Error
+	}
+	return jobs, nil
 }

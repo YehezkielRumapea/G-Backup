@@ -131,6 +131,7 @@ func main() {
 	r.GET("/jobs/scheduled", jobHandler.GetScheduledJobs)    // List Job Monitoring
 	r.GET("/jobs/script/:id", jobHandler.GetJobScript)       // Pratinjau Script
 	r.POST("/jobs/trigger/:id", jobHandler.TriggerManualJob) // Tombol "Run Now"
+	r.GET("/jobs/manual", jobHandler.GetManualJob)
 
 	// Rute Aksi
 	r.POST("/jobs/new", backupHandler.CreateNewJob)        // Create Backup (Manual/Auto)
