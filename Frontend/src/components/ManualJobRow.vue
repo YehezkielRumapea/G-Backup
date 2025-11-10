@@ -47,7 +47,7 @@ const props = defineProps({
 });
 
 // 2. Definisikan event yang akan dikirim ke parent (untuk Trigger dan View Script)
-const emit = defineEmits(['trigger', 'view-script']);
+const emit = defineEmits(['trigger', 'view-script', 'delete']);
 
 // Asumsi: Kita perlu memanggil fungsi reload di komponen parent (ManualJobs.vue)
 // Atau, kita bisa memancarkan event 'job-deleted'
@@ -56,7 +56,7 @@ const reloadData = inject('reloadData'); // Inject fungsi reload (opsional, terg
 // Logika untuk Hapus Job
 async function handleDelete() {
   if (!confirm(`Apakah Anda yakin ingin menghapus job manual "${props.job.job_name}"? Aksi ini tidak dapat dibatalkan.`)) {
-    return;
+        emit('delete', props.job.id)
   }
   
   try {

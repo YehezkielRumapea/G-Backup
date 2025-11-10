@@ -98,4 +98,15 @@ export default {
       throw error
     }
   },
+
+  async deleteJob(jobId) {
+    try {
+        // Panggil endpoint DELETE /api/v1/jobs/[id]
+        const response = await apiClient.delete(`/jobs/delete/${jobId}`);
+        return response.data;
+    } catch (error) {
+        console.error(`Error deleting job ${jobId}:`, error);
+        throw error;
+    }
+},
 }

@@ -13,6 +13,7 @@ import (
 type BackupService interface {
 	CreateJobAndDispatch(job *models.ScheduledJob) error
 	TriggerManualJob(jobID uint) error
+	DeleteJob(JobId uint) error
 }
 
 type backupServiceImpl struct {
@@ -252,4 +253,14 @@ func (s *backupServiceImpl) CalculateSourceSizeGB(path string) (float64, error) 
 	}
 	const BytesToGB = 1073741824.0
 	return float64(info.Size()) / BytesToGB, nil
+}
+
+func (s *backupServiceImpl) DeleteJob(JobID uint) error {
+	fmt.Printf("[AUDIT] User meminta penghapusan Job ID: %d\n", JobID)
+
+	// Panggil Repository untuk menghapus
+	if err := s.JobRepo.DeleteJob(JobID); err != nil {
+		return fmt.Errorf("gagal menghapus job ID %d: %w", JobID, err)
+	}
+	return nil
 }

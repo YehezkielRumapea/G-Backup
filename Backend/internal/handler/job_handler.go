@@ -90,3 +90,15 @@ func (h *JobHandler) GetManualJob(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, jobsDTO)
 }
+
+func (h *JobHandler) DeleteJob(c echo.Context) error {
+	jobIDStr := c.Param("id")
+	jobID, err := strconv.ParseUint(jobIDStr, 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Job ID tidak valid"})
+	}
+	if err := h.BackupSvc.DeleteJob(uint(jobID)); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("Gagal menghapus Job: %v", err.Error())})
+	}
+	return c.JSON(http.StatusAccepted, map[string]string{"message": "Job berhasil dihapus."})
+}

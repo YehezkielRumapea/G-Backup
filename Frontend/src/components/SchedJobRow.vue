@@ -28,16 +28,16 @@
               (i)
             </button>
 
-            <!-- <button disabled class="action-btn delete disabled" title="Hapus dinonaktifkan untuk Job Terjadwal">
+            <button @click="confirmDelete" class="action-btn delete" title="Delete Job">
               🗑
-            </button> -->
+            </button>
           </div>
         </td>
     </tr>
 </template>
 
 <script setup>
-import jobService from '@/services/jobService'; // Import service untuk aksi
+import jobService from '@/services/jobService'; 
 import { computed } from 'vue';
 
 // 1. Terima data 'job' dari parent
@@ -48,12 +48,16 @@ const props = defineProps({
   }
 });
 
-// 2. Definisikan event yang akan dikirim ke parent
-const emit = defineEmits(['trigger', 'view-script']);
+// 2. Definisikan event yang akan dikirim ke parent (TAMBAHKAN 'delete')
+const emit = defineEmits(['trigger', 'view-script', 'delete']); 
 
-// Fungsi placeholder untuk menghapus (tetapi dinonaktifkan di template)
-function handleDelete() {
-    alert("Penghapusan Job Terjadwal harus melalui menu Edit.");
+// Fungsi untuk mengkonfirmasi dan mengirim event 'delete'
+function confirmDelete() {
+    // Tampilkan dialog konfirmasi kepada user
+    if (confirm(`Apakah Anda yakin ingin menghapus job '${props.job.job_name}' (ID: ${props.job.id})? \nAksi ini tidak dapat dibatalkan dan akan menghapus konfigurasi jadwal!`)) {
+        // Kirim event 'delete' ke komponen ScheduledJobs.vue
+        emit('delete', props.job.id); 
+    }
 }
 </script>
 <style scoped>
@@ -72,7 +76,7 @@ function handleDelete() {
 .status.failed, .status.fail, .status.fail_pre_script, .status.fail_rclone { background-color: #e74c3c; }
 
 /* Styling kolom aksi */
-.job-runs-col {
+.job-actions-col {
     width: 150px; /* Lebar lebih besar untuk tombol */
 }
 .actions {

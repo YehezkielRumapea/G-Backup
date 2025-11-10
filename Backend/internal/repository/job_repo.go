@@ -18,6 +18,7 @@ type JobRepository interface {
 	UpdateLastRunStatus(jobID uint, lastRunTime time.Time, status string) error
 	UpdateJobActivity(JobID uint, isActive bool) error
 	CountJobOnRemote(remoteName string) (int64, error)
+	DeleteJob(JobID uint) error
 }
 
 type jobRepositoryImpl struct {
@@ -103,4 +104,12 @@ func (r *jobRepositoryImpl) FindManualJob() ([]models.ScheduledJob, error) {
 		return nil, result.Error
 	}
 	return jobs, nil
+}
+
+func (r *jobRepositoryImpl) DeleteJob(JobID uint) error {
+	result := r.DB.Delete(&models.ScheduledJob{}, JobID)
+	if result != nil {
+		return result.Error
+	}
+	return nil
 }

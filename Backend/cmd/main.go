@@ -132,6 +132,7 @@ func main() {
 	r.GET("/jobs/script/:id", jobHandler.GetJobScript)       // Pratinjau Script
 	r.POST("/jobs/trigger/:id", jobHandler.TriggerManualJob) // Tombol "Run Now"
 	r.GET("/jobs/manual", jobHandler.GetManualJob)
+	r.DELETE("/jobs/delete/:id", jobHandler.DeleteJob)
 
 	// Rute Aksi
 	r.POST("/jobs/new", backupHandler.CreateNewJob)        // Create Backup (Manual/Auto)

@@ -60,6 +60,7 @@
             :job="job"
             @trigger="handleTrigger"
             @view-script="handleViewScript"
+            @delete="handleDelete"
           />
         </tbody>
       </table>
@@ -141,6 +142,18 @@ async function handleViewScript(jobId) {
     const errorMsg = error.response?.data?.error || error.message;
     alert(`❌ Gagal memuat script: ${errorMsg}`);
   }
+}
+
+async function handleDeleteJob(jobId) {
+    try {
+        // Panggil service API DELETE
+        await jobService.deleteJob(jobId); 
+        alert(`✅ Job ID ${jobId} berhasil dihapus.`);
+        fetchData();
+    } catch (error) {
+        const errorMsg = error.response?.data?.error || "Gagal menghapus job.";
+        alert(`❌ Gagal menghapus job: ${errorMsg}`);
+    }
 }
 
 // Close modal
