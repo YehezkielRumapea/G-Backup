@@ -1,6 +1,6 @@
 <template>
   <div class="app-layout">
-    <!-- ==================== HEADER ==================== -->
+    <!-- Header (sama seperti sebelumnya) -->
     <header class="app-header">
       <div class="header-content">
         <div class="logo">
@@ -48,15 +48,22 @@
       </div>
     </header>
     
-    <!-- ==================== MAIN CONTENT ==================== -->
-    <main class="app-main">
-      <!-- ⭐ INI TEMPAT CHILD ROUTES DI-RENDER -->
-      <transition name="fade" mode="out-in">
-        <router-view />
-      </transition>
-    </main>
+    <!-- ⭐ Main Content dengan Log Panel -->
+    <div class="content-wrapper">
+      <!-- Main Content -->
+      <main class="app-main">
+        <transition name="fade" mode="out-in">
+          <router-view />
+        </transition>
+      </main>
+      
+      <!-- ⭐ Log Panel (Sticky di kanan) -->
+      <aside class="log-panel">
+        <SimpleLiveLog />
+      </aside>
+    </div>
     
-    <!-- ==================== FOOTER (Optional) ==================== -->
+    <!-- Footer -->
     <footer class="app-footer">
       <p>© 2024 G-Backup System | Powered by Vue.js & Golang</p>
     </footer>
@@ -66,6 +73,7 @@
 <script setup>
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/authStore';
+import SimpleLiveLog from '@/components/LiveLog.vue'; // ⭐ Import
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -79,7 +87,6 @@ const handleLogout = () => {
 </script>
 
 <style scoped>
-/* ==================== LAYOUT ==================== */
 .app-layout {
   display: flex;
   flex-direction: column;
@@ -87,7 +94,7 @@ const handleLogout = () => {
   background-color: #f5f7fa;
 }
 
-/* ==================== HEADER ==================== */
+/* Header (sama seperti sebelumnya) */
 .app-header {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
@@ -98,7 +105,7 @@ const handleLogout = () => {
 }
 
 .header-content {
-  max-width: 1400px;
+  max-width: 100%;
   margin: 0 auto;
   padding: 1rem 2rem;
   display: flex;
@@ -113,7 +120,6 @@ const handleLogout = () => {
   white-space: nowrap;
 }
 
-/* ==================== NAVIGATION ==================== */
 .main-nav {
   display: flex;
   gap: 0.5rem;
@@ -153,7 +159,6 @@ const handleLogout = () => {
   font-size: 0.9rem;
 }
 
-/* ==================== HEADER ACTIONS ==================== */
 .header-actions {
   display: flex;
   align-items: center;
@@ -180,20 +185,30 @@ const handleLogout = () => {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.logout-btn:active {
-  transform: translateY(0);
-}
-
-/* ==================== MAIN CONTENT ==================== */
-.app-main {
+/* ⭐ Content Wrapper dengan Log Panel */
+.content-wrapper {
   flex: 1;
-  padding: 2rem;
-  max-width: 1400px;
-  width: 100%;
-  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 320px; /* Main content + Log panel (320px) */
+  gap: 1.5rem;
+  padding: 1.5rem 2rem;
+  max-width: 100%;
 }
 
-/* ==================== FOOTER ==================== */
+/* Main Content */
+.app-main {
+  min-width: 0; /* Prevent overflow */
+}
+
+/* ⭐ Log Panel (Sticky) */
+.log-panel {
+  position: sticky;
+  top: calc(70px + 1.5rem); /* Header height + padding */
+  height: calc(100vh - 70px - 3rem - 60px); /* Viewport - header - padding - footer */
+  min-width: 0;
+}
+
+/* Footer */
 .app-footer {
   background: #2c3e50;
   color: white;
@@ -208,7 +223,7 @@ const handleLogout = () => {
   opacity: 0.8;
 }
 
-/* ==================== TRANSITIONS ==================== */
+/* Transitions */
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.2s ease;
@@ -219,7 +234,17 @@ const handleLogout = () => {
   opacity: 0;
 }
 
-/* ==================== RESPONSIVE ==================== */
+/* ⭐ Responsive - Hide log panel on smaller screens */
+@media (max-width: 1200px) {
+  .content-wrapper {
+    grid-template-columns: 1fr; /* Single column */
+  }
+  
+  .log-panel {
+    display: none; /* Hide on smaller screens */
+  }
+}
+
 @media (max-width: 1024px) {
   .header-content {
     flex-direction: column;
@@ -236,12 +261,11 @@ const handleLogout = () => {
   }
   
   .nav-item {
-    padding: 0.75rem;
-  }
+    padding: 0.75rem;}
 }
 
 @media (max-width: 768px) {
-  .app-main {
+  .content-wrapper {
     padding: 1rem;
   }
   

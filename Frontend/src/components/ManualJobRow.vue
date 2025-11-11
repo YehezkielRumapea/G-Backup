@@ -5,8 +5,8 @@
         <td>{{ job.type }}</td> 
 
         <td>{{ job.gdrive_target }}</td>
-
-        <td>{{ job.mode }}</td>
+<!-- 
+        <td>{{ job.mode }}</td> -->
 
         <td>{{ job.last_run || 'N/A' }}</td>
 

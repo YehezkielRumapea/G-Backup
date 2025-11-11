@@ -42,7 +42,7 @@
         <thead>
           <tr>
             <th>Nama Job</th>
-            <th>Tipe</th>
+            <th>Object</th>
             <th>Target GDrive</th>
             <th>Last Run</th>
             <th>Status</th>
