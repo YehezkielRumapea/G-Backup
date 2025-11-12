@@ -33,10 +33,10 @@
             <span class="nav-text">Create Job</span>
           </router-link>
           
-          <router-link to="/logs" class="nav-item">
+          <!-- <router-link to="/logs" class="nav-item">
             <span class="nav-icon">📝</span>
             <span class="nav-text">Logs</span>
-          </router-link>
+          </router-link> -->
         </nav>
         
         <div class="header-actions">

@@ -3,9 +3,9 @@
   <h1>Monitoring Remote</h1>
   <p>Kelola dan pantau status GDrive Remote Anda.</p>
   
-  <router-link to="/create" class="btn-add-remote">
+  <!-- <router-link to="/create" class="btn-add-remote">
    + Tambah Remote Baru
-  </router-link>
+  </router-link> -->
 
   <div v-if="isLoading" class="loading">
    Memuat data remote...
@@ -78,6 +78,7 @@ onMounted(async () => {
   padding-left: 0px;
 }
 .remotes-table th {
+  width: 100%;
  background-color: #f4f4f4;
 }
 .loading, .error {

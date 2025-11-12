@@ -93,7 +93,10 @@
   }
   /* Tambahkan semua status queue yang Anda miliki */
   .status.pending { background-color: #aaa; }
-  .status.running { background-color: #3498db; }
+  .status.running { 
+    background-color: #3498db;
+    font-size: 12px;
+   }
   .status.completed, .status.success { background-color: #2ecc71; }
   .status.failed, .status.fail, .status.fail_pre_script, .status.fail_rclone { background-color: #e74c3c; }
 
