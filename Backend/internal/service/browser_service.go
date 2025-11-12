@@ -30,16 +30,28 @@ func NewBrowserService() BrowserService {
 
 // ListFiles: Menjalankan 'rclone lsjson'
 func (s *browserServiceImpl) ListFiles(remoteName string, path string) ([]RcloneFile, error) {
-	// 1. Generate command
-	CleanPath := strings.TrimPrefix(path, "/")
-	fullPath := fmt.Sprintf("%s:%s", remoteName, CleanPath)
-	// rclone lsjson [remote:path]
-	args := []string{"rclone", "lsjson", fullPath, "--no-mimetype", "--no-modtime-accuracy"}
 
-	// 2. Eksekusi (menggunakan Executor Anda)
+	// Pastikan path selalu string kosong jika inputnya "/"
+	CleanPath := strings.TrimPrefix(path, "/")
+
+	// 1. Generate command
+	fullPath := fmt.Sprintf("%s:%s", remoteName, CleanPath)
+
+	// ✅ Tambahkan --max-depth 1 untuk navigasi folder interaktif
+	args := []string{
+		"rclone",
+		"lsjson",
+		fullPath,
+		// "--no-mimetype",
+		// "--max-depth", "1", // Limit ke folder saat ini
+	}
+
+	// 2. Eksekusi
 	result := ExecuteCliJob(args)
 	if !result.Success {
-		return nil, fmt.Errorf("gagal list files: %s", result.ErrorMsg)
+		// Gabungkan stderr/stdout dari Rclone untuk debugging yang lebih baik
+		detailedError := fmt.Sprintf("Rclone failed for path '%s'. Detail: %s", fullPath, result.ErrorMsg)
+		return nil, fmt.Errorf(detailedError)
 	}
 
 	// 3. Parse JSON

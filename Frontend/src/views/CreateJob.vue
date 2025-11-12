@@ -468,7 +468,12 @@ function handleRemoteSelect() {
   currentPath.value = '/';
   searchQuery.value = '';
   restoreForm.value.source_path = '';
+  if (form.value.remote_name) {
   loadFiles();
+ } else {
+      // Kosongkan daftar file jika remote dibatalkan/belum dipilih
+      files.value = [];
+  }
 }
 
 // ⭐ Load Files from Google Drive

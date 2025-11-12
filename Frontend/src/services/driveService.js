@@ -6,7 +6,7 @@ const driveService = {
    */
   async listFiles(remoteName, path = '/', searchTerm = '') {
     try {
-      const response = await apiClient.post('/browser/list', {
+      const response = await apiClient.get('/browser/list', {
         remote_name: remoteName,
         path: path,
         search_term: searchTerm
