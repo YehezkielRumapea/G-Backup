@@ -1,9 +1,15 @@
 <template>
   <div class="config-view">
-    <form @submit.prevent="handleBackupSubmit" class="config-form">
-      <h2>📋 Backup Configuration</h2>
+      <div v-if="isVisible" class="modal-overlay" @click.self="close">
+      <div class="modal-content">
+      <div class="modal-header">
+          <h2>📋 Backup Configuration</h2>
+          <button class="close-btn" @click="close">✖</button>
+        </div>  
+      <form @submit.prevent="handleBackupSubmit" class="config-form">
       <p>Buat template Job baru (Manual atau Terjadwal). Logika backup harus disediakan di Pre-Script.</p>
 
+      <!-- Job Name -->
       <div class="form-group">
         <label for="backup-jobName">Job Name (Nama Pekerjaan) *</label>
         <input 
@@ -15,6 +21,7 @@
         />
       </div>
 
+      <!-- Source Path -->
       <div class="form-group">
         <label for="backup-source">Source Path (Lokal) *</label>
         <input 
@@ -27,6 +34,7 @@
         <small class="hint">Path file hasil dari pre-script yang akan di-upload</small>
       </div>
 
+      <!-- Remote Name -->
       <div class="form-group">
         <label for="backup-remote">Remote Name *</label>
         <input 
@@ -39,6 +47,7 @@
         <small class="hint">Nama remote yang sudah dikonfigurasi di rclone</small>
       </div>
 
+      <!-- Destination Path -->
       <div class="form-group">
         <label for="backup-dest">Destination Path (Cloud) *</label>
         <input 
@@ -51,6 +60,7 @@
         <small class="hint">Folder tujuan di cloud storage</small>
       </div>
 
+      <!-- Schedule Section -->
       <div class="schedule-section">
         <div class="section-header">
           <h3>⏰ Schedule Configuration</h3>
@@ -67,6 +77,7 @@
           </label>
         </div>
 
+        <!-- Schedule Options -->
         <transition name="slide-fade">
           <div v-if="isScheduled" class="schedule-options">
             <div class="schedule-type-selector">
@@ -82,6 +93,7 @@
               </button>
             </div>
 
+            <!-- HOURLY -->
             <div v-if="scheduleType === 'hourly'" class="schedule-config">
               <label>Every</label>
               <div class="input-group">
@@ -96,6 +108,7 @@
               </div>
             </div>
 
+            <!-- DAILY -->
             <div v-if="scheduleType === 'daily'" class="schedule-config">
               <label>Every day at</label>
               <div class="input-group">
@@ -107,6 +120,7 @@
               </div>
             </div>
 
+            <!-- WEEKLY -->
             <div v-if="scheduleType === 'weekly'" class="schedule-config">
               <label>Every</label>
               <div class="weekdays-selector">
@@ -130,6 +144,7 @@
               </div>
             </div>
 
+            <!-- MONTHLY -->
             <div v-if="scheduleType === 'monthly'" class="schedule-config">
               <label>On day</label>
               <div class="input-group">
@@ -152,6 +167,7 @@
               </div>
             </div>
 
+            <!-- CUSTOM -->
             <div v-if="scheduleType === 'custom'" class="schedule-config">
               <label>Custom Cron Expression</label>
               <input 
@@ -168,6 +184,7 @@
               </small>
             </div>
 
+            <!-- CRON PREVIEW -->
             <div class="cron-preview">
               <span class="preview-label">Cron Expression:</span>
               <code class="preview-code">{{ generatedCron || '-' }}</code>
@@ -177,6 +194,7 @@
         </transition>
       </div>
 
+      <!-- Pre-Script -->
       <div class="form-group">
         <label for="backup-pre">Pre-Script (Executed BEFORE Rclone)</label>
         <textarea 
@@ -191,6 +209,7 @@ gzip /tmp/backup.sql"
         <small class="hint">Script untuk generate file backup (e.g., mysqldump, tar, zip)</small>
       </div>
 
+      <!-- Post-Script -->
       <div class="form-group">
         <label for="backup-post">Post-Script (Executed AFTER successful upload)</label>
         <textarea 
@@ -204,6 +223,7 @@ rm /tmp/backup.sql.gz"
         <small class="hint">Script untuk cleanup atau notifikasi</small>
       </div>
 
+      <!-- Buttons -->
       <div class="form-actions">
         <button type="button" @click="resetForm" class="btn-secondary">
           Reset
@@ -216,7 +236,8 @@ rm /tmp/backup.sql.gz"
         </button>
       </div>
     </form>
-    
+
+    <!-- Messages -->
     <transition name="fade">
       <div v-if="message" class="message success">
         <span class="message-icon">✅</span>
@@ -231,23 +252,31 @@ rm /tmp/backup.sql.gz"
       </div>
     </transition>
   </div>
+  </div>
+  </div>
 </template>
 
 <script setup>
 import { ref, computed, watch } from 'vue';
-import jobService from '@/services/jobService';
 import { useRouter } from 'vue-router';
+import jobService from '@/services/jobService';
 
+const props = defineProps({
+  isVisible: Boolean
+})
+const emit = defineEmits(['close', 'success'])
+
+// Router
 const router = useRouter();
+
+// Reactive states
 const isLoading = ref(false);
-const errorMessage = ref(null);
 const message = ref(null);
+const errorMessage = ref(null);
 
-// Schedule state
+// Schedule
 const isScheduled = ref(false);
-const scheduleType = ref('daily'); 
-
-// Schedule configuration
+const scheduleType = ref('daily');
 const scheduleConfig = ref({
   hours: 1,
   time: '00:00',
@@ -265,7 +294,6 @@ const scheduleTypes = [
   { value: 'custom', label: 'Custom', icon: '⚙️' }
 ];
 
-// Weekdays
 const weekdays = [
   { value: 0, short: 'Sun', full: 'Sunday' },
   { value: 1, short: 'Mon', full: 'Monday' },
@@ -276,7 +304,7 @@ const weekdays = [
   { value: 6, short: 'Sat', full: 'Saturday' }
 ];
 
-// Form state
+// Form data
 const backupForm = ref({
   job_name: '',
   rclone_mode: 'COPY',
@@ -288,78 +316,67 @@ const backupForm = ref({
   post_script: ''
 });
 
-// Generate cron expression (Logic from original file)
+// Computed: Cron Expression
 const generatedCron = computed(() => {
   if (!isScheduled.value) return '';
-  // ... (Cron generation logic remains the same)
-  if (scheduleType.value === 'custom') {
-    return scheduleConfig.value.customCron;
+  const cfg = scheduleConfig.value;
+
+  switch (scheduleType.value) {
+    case 'hourly':
+      return `0 */${cfg.hours} * * *`;
+    case 'daily': {
+      const [h, m] = cfg.time.split(':');
+      return `${m} ${h} * * *`;
+    }
+    case 'weekly': {
+      const [h, m] = cfg.time.split(':');
+      const days = cfg.weekdays.sort().join(',');
+      return days ? `${m} ${h} * * ${days}` : '';
+    }
+    case 'monthly': {
+      const [h, m] = cfg.time.split(':');
+      return `${m} ${h} ${cfg.dayOfMonth} * *`;
+    }
+    case 'custom':
+      return cfg.customCron;
+    default:
+      return '';
   }
-  
-  if (scheduleType.value === 'hourly') {
-    const hours = scheduleConfig.value.hours;
-    return `0 */${hours} * * *`;
-  }
-  
-  if (scheduleType.value === 'daily') {
-    const [hour, minute] = scheduleConfig.value.time.split(':');
-    return `${minute} ${hour} * * *`;
-  }
-  
-  if (scheduleType.value === 'weekly') {
-    const [hour, minute] = scheduleConfig.value.time.split(':');
-    const days = scheduleConfig.value.weekdays.sort().join(',');
-    return days ? `${minute} ${hour} * * ${days}` : '';
-  }
-  
-  if (scheduleType.value === 'monthly') {
-    const [hour, minute] = scheduleConfig.value.time.split(':');
-    const day = scheduleConfig.value.dayOfMonth;
-    return `${minute} ${hour} ${day} * *`;
-  }
-  
-  return '';
 });
 
-// Cron description (Logic from original file)
+// Computed: Cron Description
 const cronDescription = computed(() => {
   if (!generatedCron.value) return 'No schedule configured';
-  // ... (Cron description logic remains the same)
-  if (scheduleType.value === 'hourly') {
-    const h = scheduleConfig.value.hours;
-    return `Every ${h} hour${h > 1 ? 's' : ''}`;
+  const cfg = scheduleConfig.value;
+
+  switch (scheduleType.value) {
+    case 'hourly':
+      return `Every ${cfg.hours} hour${cfg.hours > 1 ? 's' : ''}`;
+    case 'daily':
+      return `Every day at ${cfg.time}`;
+    case 'weekly': {
+      const days = cfg.weekdays
+        .map(d => weekdays.find(w => w.value === d)?.full)
+        .join(', ');
+      return `Every ${days || 'no days selected'} at ${cfg.time}`;
+    }
+    case 'monthly':
+      return `On day ${cfg.dayOfMonth} of every month at ${cfg.time}`;
+    case 'custom':
+      return `Custom cron: ${cfg.customCron}`;
+    default:
+      return 'No schedule configured';
   }
-  
-  if (scheduleType.value === 'daily') {
-    return `Every day at ${scheduleConfig.value.time}`;
-  }
-  
-  if (scheduleType.value === 'weekly') {
-    const days = scheduleConfig.value.weekdays
-      .map(d => weekdays.find(w => w.value === d)?.full)
-      .join(', ');
-    return `Every ${days || 'no days selected'} at ${scheduleConfig.value.time}`;
-  }
-  
-  if (scheduleType.value === 'monthly') {
-    const day = scheduleConfig.value.dayOfMonth;
-    const suffix = day === 1 ? 'st' : day === 2 ? 'nd' : day === 3 ? 'rd' : 'th';
-    return `On the ${day}${suffix} of every month at ${scheduleConfig.value.time}`;
-  }
-  
-  return 'Custom schedule';
 });
 
-// Watch generated cron and update form
+// Watch cron to update form
 watch(generatedCron, (newCron) => {
   backupForm.value.schedule_cron = newCron;
 });
 
 // Functions
 function handleScheduleToggle() {
-  if (!isScheduled.value) {
-    backupForm.value.schedule_cron = '';
-  }
+  if (!isScheduled.value) backupForm.value.schedule_cron = '';
 }
 
 function selectScheduleType(type) {
@@ -367,12 +384,10 @@ function selectScheduleType(type) {
 }
 
 function toggleWeekday(day) {
-  const index = scheduleConfig.value.weekdays.indexOf(day);
-  if (index > -1) {
-    scheduleConfig.value.weekdays.splice(index, 1);
-  } else {
-    scheduleConfig.value.weekdays.push(day);
-  }
+  const days = scheduleConfig.value.weekdays;
+  const idx = days.indexOf(day);
+  if (idx > -1) days.splice(idx, 1);
+  else days.push(day);
 }
 
 function resetForm() {
@@ -397,28 +412,23 @@ function resetForm() {
 }
 
 async function handleBackupSubmit() {
-  isLoading.value = true;
-  errorMessage.value = null;
-  message.value = null;
-  
+  isLoading.value = true
+  message.value = null
+  errorMessage.value = null
   try {
-    const response = await jobService.createBackupJob(backupForm.value);
-    message.value = response.message || 'Job created successfully!';
-    
-    setTimeout(() => {
-      if (isScheduled.value) {
-        router.push('/scheduled');
-      } else {
-        router.push('/manual');
-      }
-    }, 1500);
-    
-  } catch (error) {
-    console.error('Create backup job error:', error);
-    errorMessage.value = error.response?.data?.error || 'Failed to create backup job. Please check your input.';
+    const res = await jobService.createBackupJob(backupForm.value)
+    message.value = res.message || 'Job created successfully!'
+    emit('success')
+    setTimeout(() => emit('close'), 1500)
+  } catch (err) {
+    errorMessage.value = err.response?.data?.error || 'Failed to create backup job.'
   } finally {
-    isLoading.value = false;
+    isLoading.value = false
   }
+}
+
+function close() {
+  emit('close')
 }
 </script>
 
@@ -894,5 +904,65 @@ async function handleBackupSubmit() {
  .btn-secondary {
   width: 100%;
  }
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+/* Modal box */
+.modal-content {
+  background: #fff;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 2rem;
+  position: relative;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+/* Header */
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #2c3e50;
+}
+
+.close-btn {
+  background: transparent;
+  border: none;
+  font-size: 1.3rem;
+  cursor: pointer;
+  color: #888;
+}
+
+.close-btn:hover {
+  color: #000;
+}
+
+/* Transisi */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>

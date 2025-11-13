@@ -1,73 +1,56 @@
 <template>
-  <div class="restore-view">
-    <form @submit.prevent="handleRestoreSubmit" class="config-form restore-form">
-      <h2>🔄 Restore Configuration</h2>
-      <p>Download file dari cloud storage dan restore ke path lokal.</p>
-      
-      <div class="form-group">
-        <label for="restore-remote">Remote Name (Source) *</label>
-        <input 
-          type="text" 
-          id="restore-remote" 
-          v-model="restoreForm.remote_name" 
-          required 
-          placeholder="Gdrive1"
-        />
-      </div>
-
-      <div class="form-group">
-        <label for="restore-source">Source Path (Cloud) *</label>
-        <input 
-          type="text" 
-          id="restore-source" 
-          v-model="restoreForm.source_path" 
-          required 
-          placeholder="/backups/database/backup_20240110.sql.gz"
-        />
-      </div>
-
-      <div class="form-group">
-        <label for="restore-dest">Destination Path (Local Server) *</label>
-        <input 
-          type="text" 
-          id="restore-dest" 
-          v-model="restoreForm.destination_path" 
-          required 
-          placeholder="/home/user/restore/"
-        />
-      </div>
-      
-      <div class="form-actions">
-        <button type="submit" :disabled="isLoading" class="btn-submit btn-restore">
-          <span v-if="isLoading">⏳ Starting Restore...</span>
-          <span v-else>🔄 Start Restore</span>
-        </button>
-      </div>
-    </form>
-
-    <transition name="fade">
-      <div v-if="message" class="message success">
-        <span class="message-icon">✅</span>
-        {{ message }}
-      </div>
-    </transition>
-
-    <transition name="fade">
-      <div v-if="errorMessage" class="message error">
-        <span class="message-icon">❌</span>
-        {{ errorMessage }}
-      </div>
-    </transition>
-  </div>
-  <div v-if="props.isVisible" class="modal-overlay" @click.self="emit('close')">
-    <div class="modal-content">
-      <button type="button" @click="emit('close')" class="modal-close-btn">✕</button>
-      
-      <div class="restore-view">
+  <transition name="fade">
+    <div v-if="props.isVisible" class="modal-overlay" @click.self="close">
+      <div class="modal-content">
+        <!-- Header -->
+        <div class="modal-header">
+          <h2>🔄 Restore Configuration</h2>
+          <button type="button" class="close-btn" @click="close">✕</button>
         </div>
-      
+
+        <!-- Form & Messages -->
+        <div class="restore-view">
+          <form @submit.prevent="handleRestoreSubmit" class="config-form restore-form">
+            <p>Download file dari cloud storage dan restore ke path lokal.</p>
+
+            <div class="form-group">
+              <label for="restore-remote">Remote Name (Source) *</label>
+              <input type="text" id="restore-remote" v-model="restoreForm.remote_name" required placeholder="Gdrive1"/>
+            </div>
+
+            <div class="form-group">
+              <label for="restore-source">Source Path (Cloud) *</label>
+              <input type="text" id="restore-source" v-model="restoreForm.source_path" required placeholder="/backups/database/backup_20240110.sql.gz"/>
+            </div>
+
+            <div class="form-group">
+              <label for="restore-dest">Destination Path (Local Server) *</label>
+              <input type="text" id="restore-dest" v-model="restoreForm.destination_path" required placeholder="/home/user/restore/"/>
+            </div>
+
+            <div class="form-actions">
+              <button type="submit" :disabled="isLoading" class="btn-submit btn-restore">
+                <span v-if="isLoading">⏳ Starting Restore...</span>
+                <span v-else>🔄 Start Restore</span>
+              </button>
+            </div>
+          </form>
+
+          <transition name="fade">
+            <div v-if="message" class="message success">
+              <span class="message-icon">✅</span>{{ message }}
+            </div>
+          </transition>
+
+          <transition name="fade">
+            <div v-if="errorMessage" class="message error">
+              <span class="message-icon">❌</span>{{ errorMessage }}
+            </div>
+          </transition>
+        </div>
+      </div>
     </div>
-  </div>
+  </transition>
 </template>
 
 <script setup>
@@ -75,23 +58,24 @@ import { ref } from 'vue';
 import jobService from '@/services/jobService'; // Pastikan path ini benar
 import { useRouter } from 'vue-router';
 
+// Props & Emits
+const props = defineProps({
+  isVisible: { type: Boolean, default: false }
+});
+const emit = defineEmits(['close', 'success']);
+
+
 const router = useRouter();
 const isLoading = ref(false);
 const errorMessage = ref(null);
 const message = ref(null);
 
 // Di dalam <script setup> CreateRestore.vue
-const props = defineProps({
-    isVisible: {
-        type: Boolean,
-        default: false,
-        required: true // Pastikan ini ada
-    },
-    // ... props lain jika ada
-});
 
 // Dan definisikan emits
-const emit = defineEmits(['close', 'success']);
+function close() {
+  emit('close');
+};
 
 const restoreForm = ref({
   remote_name: '',
@@ -101,18 +85,19 @@ const restoreForm = ref({
 
 async function handleRestoreSubmit() {
   isLoading.value = true;
-  errorMessage.value = null;
   message.value = null;
+  errorMessage.value = null;
 
   try {
     const response = await jobService.createRestoreJob(restoreForm.value);
     message.value = response.message || 'Restore job started successfully!';
-    
-    // Redirect setelah 1.5 detik
-    setTimeout(() => {
-      router.push('/logs');
-    }, 1500);
-    
+    emit('success');
+
+    // Tutup modal otomatis setelah 1,5 detik
+    setTimeout(() => close(), 1500);
+
+    // Redirect jika mau ke logs (opsional)
+    setTimeout(() => router.push('/logs'), 1500);
   } catch (error) {
     console.error('Create restore job error:', error);
     errorMessage.value = error.response?.data?.error || 'Failed to start restore.';
@@ -291,5 +276,50 @@ async function handleRestoreSubmit() {
   .btn-submit {
     width: 100%;
   }
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 999;
+}
+.modal-content {
+  background: #fff;
+  padding: 2rem;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 900px;
+  position: relative;
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+.close-btn {
+  background: transparent;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+/* --- Rest of styles copied dari RestoreForm --- */
+.restore-view {
+  max-width: 100%;
+}
+
+/* Transitions */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>
