@@ -11,7 +11,6 @@ import AppLayout from '@/views/AppLayout.vue';
 // ============================================
 import Login from '@/views/Login.vue';
 import Dashboard from '@/views/Dashboard.vue';
-import CreateJob from '@/views/CreateJob.vue';
 import Logs from '@/views/Logs.vue';
 import ManualJobs from '@/views/ManualJobs.vue';
 import Remotes from '@/views/Remotes.vue';
@@ -89,17 +88,6 @@ const routes = [
                 meta: { 
                     title: 'Manual Jobs - G-Backup',
                     icon: '🔧'
-                }
-            },
-            
-            // Create Job
-            {
-                path: 'create',
-                name: 'CreateJob',
-                component: CreateJob,
-                meta: { 
-                    title: 'Create Job - G-Backup',
-                    icon: '➕'
                 }
             },
             

@@ -18,7 +18,7 @@ body {
 
 /* 3. Root container aplikasi */
 #app {
-  display: flex;
+  display: block;
   width: 100%;
   min-height: 100vh;
 }

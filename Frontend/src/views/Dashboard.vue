@@ -134,15 +134,16 @@ async function fetchData() {
   isLoadingJobs.value = true;
   
   try {
-    const [remotesRes, jobsRes] = await Promise.all([
-      monitoringService.getRemotes(),
+    const [remotesData, jobsData] = await Promise.all([
+      monitoringService.getRemoteStatus(),
       monitoringService.getScheduledJobs()
     ]);
     
-    remotes.value = Array.isArray(remotesRes.data) ? remotesRes.data : [];
-    jobs.value = Array.isArray(jobsRes.data) ? jobsRes.data : [];
+    remotes.value = Array.isArray(remotesData) ? remotesData : [];
+    jobs.value = Array.isArray(jobsData) ? jobsData : [];
   } catch (error) {
     console.error('Failed to fetch dashboard data:', error);
+    errorMsg.value = 'Gagal memuat data. Cek koneksi API.';
   } finally {
     isLoadingJobs.value = false;
   }
