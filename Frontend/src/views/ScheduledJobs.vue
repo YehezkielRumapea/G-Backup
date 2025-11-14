@@ -281,8 +281,8 @@ h1 {
   padding: 0.875rem 1rem;
   text-align: left;
   font-size: 0.8125rem;
-  font-weight: 600;
-  color: #666;
+  font-weight: bold;
+  color: #000000;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   border-bottom: 1px solid #e5e5e5;

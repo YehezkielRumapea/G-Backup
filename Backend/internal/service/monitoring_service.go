@@ -15,7 +15,9 @@ type MonitoringService interface {
 	GetRemoteStatusList() ([]models.Monitoring, error)
 	GetRcloneConfiguredRemotes() ([]string, error) // Untuk Startup Discovery
 	GetJobLogs() ([]models.Log, error)
-	DiscoverAndSaveRemote() error // Untuk UI Logs
+	DiscoverAndSaveRemote() error // Untuk UI Logs\
+	startMonitoringDaemon()
+	RunRemoteChecks() error
 }
 
 // monitoringServiceImpl adalah struct implementasi
@@ -24,6 +26,8 @@ type monitoringServiceImpl struct {
 	LogRepo     repository.LogRepository // Dependency untuk GetJobLogs
 	JobRepo     repository.JobRepository
 }
+
+const intervalCek = 30 * time.Minute
 
 // NewMonitoringService adalah constructor untuk DI
 func NewMonitoringService(mRepo repository.MonitoringRepository, lRepo repository.LogRepository, jRepo repository.JobRepository) MonitoringService {
@@ -174,4 +178,29 @@ func (s *monitoringServiceImpl) DiscoverAndSaveRemote() error {
 
 func (s *monitoringServiceImpl) FindByRemoteName(remoteName string) (*models.Monitoring, error) {
 	return s.MonitorRepo.FindRemoteByName(remoteName)
+}
+
+func (r *monitoringServiceImpl) RunRemoteChecks() error {
+	remotes, err := r.MonitorRepo.FindAllRemotes()
+	if err != nil {
+		return err
+	}
+
+	for _, remote := range remotes {
+		// Jalankan UpdateRemoteStatus di goroutine agar pengecekan Rclone berjalan paralel
+		go r.UpdateRemoteStatus(remote.RemoteName)
+	}
+	return nil
+}
+
+func (r *monitoringServiceImpl) startMonitoringDaemon() {
+	go func() {
+		fmt.Printf("Monitoring Daemon aktif, pengecekan tiap %s\n", intervalCek)
+		for {
+			if err := r.RunRemoteChecks(); err != nil {
+				fmt.Printf("⚠️ Daemon Error: %v\n", err)
+			}
+			time.Sleep(intervalCek)
+		}
+	}()
 }

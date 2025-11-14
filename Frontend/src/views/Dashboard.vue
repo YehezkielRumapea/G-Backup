@@ -49,7 +49,7 @@
 
     <!-- Next Job Section -->
     <div class="section">
-      <h2>Next Scheduled Job</h2>
+      <h2>Next Run</h2>
       
       <div v-if="isLoadingJobs" class="status-message">
         <span class="loading-dot"></span>
@@ -58,17 +58,16 @@
 
       <div v-else-if="nextJob" class="next-job-card">
         <div class="job-header">
-          <span class="job-type-badge">{{ nextJob.jobType }}</span>
           <span class="job-time">{{ formatNextRun(nextJob.nextRun) }}</span>
         </div>
         <h3>{{ nextJob.name }}</h3>
         <div class="job-details">
           <div class="detail-item">
-            <span class="detail-label">Remote</span>
+            <span class="detail-label">Drive Target</span>
             <span class="detail-value">{{ nextJob.remoteName }}</span>
           </div>
           <div class="detail-item">
-            <span class="detail-label">Schedule</span>
+            <span class="detail-label">Time</span>
             <span class="detail-value">{{ nextJob.scheduleCron }}</span>
           </div>
         </div>
@@ -112,16 +111,73 @@ const showRestoreModal = ref(false);
 const totalRemotes = computed(() => remotes.value.length);
 const totalJobs = computed(() => jobs.value.length);
 
+// Di file: Dashboard.vue <script setup>
+
 const nextJob = computed(() => {
-  if (!Array.isArray(jobs.value) || jobs.value.length === 0) return null;
-  
-  const futureJobs = jobs.value
-    .map(j => ({ ...j, nextRunDate: new Date(j.nextRun) }))
-    .filter(j => j.nextRunDate && j.nextRunDate > new Date())
-    .sort((a, b) => a.nextRunDate - b.nextRunDate);
-  
-  return futureJobs.length > 0 ? futureJobs[0] : null;
+    // Debug: Log raw data
+    console.log('Raw jobs data:', jobs.value);
+    
+    if (!Array.isArray(jobs.value) || jobs.value.length === 0) {
+      console.log('No jobs available');
+      return null;
+    }
+    
+    const now = new Date();
+    
+    const futureJobs = jobs.value
+        .filter(j => {
+            // ✅ Menggunakan snake_case: j.next_run
+            const hasNextRun = j.next_run && j.next_run !== 'N/A' && j.next_run !== '';
+            console.log('Job:', j.job_name, 'has next_run:', hasNextRun, 'value:', j.next_run);
+            return hasNextRun;
+        })
+        .map(j => {
+            const nextRunDate = new Date(j.next_run);
+            const timeDiff = nextRunDate - now;
+            
+            console.log('Processing job:', {
+              name: j.job_name,
+              nextRun: j.next_run,
+              timeDiff: timeDiff,
+              isValid: !isNaN(nextRunDate.getTime()),
+              isFuture: timeDiff > 0
+            });
+            
+            return {
+                // ✅ MAPPING FINAL KE OBJECT YANG LEBIH CLEAN
+                name: j.job_name,
+                jobType: j.type, // Menggunakan field 'type' dari DTO
+                remoteName: j.gdrive_target, // Menggunakan field 'gdrive_target'
+                scheduleCron: j.next_run, 
+                nextRunDate: nextRunDate,
+                timeDiff: timeDiff
+            };
+        })
+        .filter(j => {
+            // ✅ Filter KRITIS: Pastikan tanggal valid dan di masa depan
+            const isValid = !isNaN(j.nextRunDate.getTime()) && j.timeDiff > 0;
+            console.log('Filter result for', j.name, ':', isValid);
+            return isValid;
+        })
+        .sort((a, b) => a.timeDiff - b.timeDiff);
+    
+    console.log('Future jobs found:', futureJobs.length);
+    if (futureJobs.length > 0) {
+        console.log('Next job selected:', futureJobs[0]);
+        // ✅ PASTIKAN RETURN OBJECT COCOK DENGAN TEMPLATE
+        const next = futureJobs[0];
+        return {
+            jobType: next.jobType,
+            nextRun: next.nextRunDate, // Mengirim objek Date ke formatNextRun
+            name: next.name,
+            remoteName: next.remoteName,
+            scheduleCron: next.scheduleCron // Mengirim cron string
+        };
+    }
+    
+    return null;
 });
+// ... (sisa code tetap sama)
 
 // Lifecycle
 onMounted(async () => {

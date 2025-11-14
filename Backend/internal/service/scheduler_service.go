@@ -191,7 +191,7 @@ func (s *schedulerServiceImpl) GetScheduledJobsInfo() ([]JobMonitoringDTO, error
 			Mode:         mode,
 			LastRun:      lastRunStr,
 			Status:       job.StatusQueue,
-			NextRun:      nextRunTime.Format("02-01-2006 15:04"),
+			NextRun:      nextRunTime.Format("2006-01-02 15:04:05"),
 			FullScript:   fullScript,
 		})
 	}

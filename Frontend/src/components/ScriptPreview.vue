@@ -6,7 +6,6 @@
           <!-- HEADER -->
           <div class="modal-header">
             <div class="header-left">
-              <span class="icon">📜</span>
               <h3>Script Preview</h3>
               <span class="job-id">Job ID: {{ jobId }}</span>
             </div>
@@ -23,11 +22,11 @@
             </div>
             <div class="toolbar-right">
               <button @click="copyToClipboard" class="toolbar-btn" :class="{ copied: isCopied }">
-                <span v-if="!isCopied">📋 Copy</span>
-                <span v-else>✅ Copied!</span>
+                <span v-if="!isCopied">Copy</span>
+                <span v-else>Copied</span>
               </button>
               <button @click="downloadScript" class="toolbar-btn">
-                💾 Download
+                Download
               </button>
             </div>
           </div>
@@ -54,7 +53,7 @@
           <!-- FOOTER -->
           <div class="modal-footer">
             <div class="footer-info">
-              <span>💡 Tip: Scroll untuk melihat lebih banyak code</span>
+              <span>Scroll to view more code</span>
             </div>
             <button @click="handleClose" class="btn-close">Close</button>
           </div>
@@ -65,14 +64,11 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick } from 'vue';
+import { ref, computed, watch } from 'vue';
 import hljs from 'highlight.js';
 
-// Import theme CSS (pilih salah satu)
-import 'highlight.js/styles/atom-one-dark.css'; // Dark theme
-// import 'highlight.js/styles/github.css'; // Light theme
-// import 'highlight.js/styles/monokai-sublime.css'; // Alternative dark
-// import 'highlight.js/styles/vs2015.css'; // VS Code dark
+// Import theme CSS
+import 'highlight.js/styles/atom-one-dark.css';
 
 const props = defineProps({
   isVisible: {
@@ -130,7 +126,6 @@ const highlightedCode = computed(() => {
     return result.value;
   } catch (error) {
     console.error('Highlight error:', error);
-    // Fallback: escape HTML manually
     return props.scriptContent
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
@@ -141,10 +136,8 @@ const highlightedCode = computed(() => {
 // Watch for visibility changes
 watch(() => props.isVisible, (newVal) => {
   if (newVal) {
-    // Prevent body scroll when modal is open
     document.body.style.overflow = 'hidden';
   } else {
-    // Restore body scroll
     document.body.style.overflow = '';
     isCopied.value = false;
   }
@@ -202,14 +195,14 @@ watch(() => props.isVisible, (newVal) => {
 </script>
 
 <style scoped>
-/* ==================== MODAL OVERLAY ==================== */
+/* Modal Overlay */
 .modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.75);
+  background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
@@ -218,93 +211,78 @@ watch(() => props.isVisible, (newVal) => {
   padding: 20px;
 }
 
-/* ==================== MODAL CONTAINER ==================== */
+/* Modal Container */
 .modal-container {
   background: #1e1e1e;
-  border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  border-radius: 8px;
+  border: 1px solid #3e3e42;
   width: 90%;
   max-width: 1000px;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: slideIn 0.3s ease-out;
 }
 
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(-30px) scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-/* ==================== HEADER ==================== */
+/* Header */
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 24px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+  padding: 1.25rem 1.5rem;
+  background: #252526;
+  border-bottom: 1px solid #3e3e42;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 12px;
-}
-
-.icon {
-  font-size: 1.5rem;
+  gap: 1rem;
 }
 
 .modal-header h3 {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: 1.125rem;
   font-weight: 600;
+  color: #d4d4d4;
 }
 
 .job-id {
-  background: rgba(255, 255, 255, 0.2);
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 0.85rem;
+  background: #3e3e42;
+  padding: 0.25rem 0.625rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
   font-weight: 500;
+  color: #858585;
 }
 
 .close-btn {
-  background: rgba(255, 255, 255, 0.15);
-  border: none;
-  color: white;
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
+  background: transparent;
+  border: 1px solid #3e3e42;
+  color: #858585;
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
-  font-size: 1.8rem;
+  font-size: 1.5rem;
   line-height: 1;
 }
 
 .close-btn:hover {
-  background: rgba(255, 255, 255, 0.25);
-  transform: scale(1.1);
+  background: #3e3e42;
+  color: #d4d4d4;
 }
 
-/* ==================== TOOLBAR ==================== */
+/* Toolbar */
 .modal-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 24px;
+  padding: 0.75rem 1.5rem;
   background: #252526;
   border-bottom: 1px solid #3e3e42;
 }
@@ -312,56 +290,54 @@ watch(() => props.isVisible, (newVal) => {
 .toolbar-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 0.75rem;
 }
 
 .language-badge {
-  background: #007acc;
-  color: white;
-  padding: 4px 10px;
+  background: #1a1a1a;
+  color: #858585;
+  padding: 0.25rem 0.625rem;
   border-radius: 4px;
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.05em;
 }
 
 .line-count {
   color: #858585;
-  font-size: 0.85rem;
+  font-size: 0.8125rem;
 }
 
 .toolbar-right {
   display: flex;
-  gap: 8px;
+  gap: 0.5rem;
 }
 
 .toolbar-btn {
-  background: #3c3c3c;
-  border: 1px solid #555;
-  color: #d4d4d4;
-  padding: 6px 12px;
-  border-radius: 6px;
+  background: transparent;
+  border: 1px solid #3e3e42;
+  color: #858585;
+  padding: 0.375rem 0.875rem;
+  border-radius: 4px;
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: 0.8125rem;
   transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  font-weight: 500;
 }
 
 .toolbar-btn:hover {
-  background: #505050;
-  border-color: #666;
+  background: #3e3e42;
+  color: #d4d4d4;
 }
 
 .toolbar-btn.copied {
-  background: #0e7c3e;
-  border-color: #0e7c3e;
+  background: #22c55e;
+  border-color: #22c55e;
   color: white;
 }
 
-/* ==================== BODY (CODE CONTAINER) ==================== */
+/* Body (Code Container) */
 .modal-body {
   flex: 1;
   overflow: auto;
@@ -377,7 +353,7 @@ watch(() => props.isVisible, (newVal) => {
 .line-numbers {
   background: #1e1e1e;
   color: #858585;
-  padding: 16px 12px;
+  padding: 1rem 0.75rem;
   text-align: right;
   user-select: none;
   border-right: 1px solid #3e3e42;
@@ -388,14 +364,14 @@ watch(() => props.isVisible, (newVal) => {
 }
 
 .line-number {
-  height: 20.8px; /* Match code line height */
+  height: 20.8px;
 }
 
 /* Code Content */
 .code-content {
   flex: 1;
   margin: 0;
-  padding: 16px 20px;
+  padding: 1rem 1.25rem;
   background: transparent;
   color: #d4d4d4;
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
@@ -411,7 +387,7 @@ watch(() => props.isVisible, (newVal) => {
   color: inherit;
 }
 
-/* Custom scrollbar untuk code area */
+/* Custom scrollbar */
 .modal-body::-webkit-scrollbar {
   width: 12px;
   height: 12px;
@@ -430,41 +406,42 @@ watch(() => props.isVisible, (newVal) => {
   background: #4e4e4e;
 }
 
-/* ==================== FOOTER ==================== */
+/* Footer */
 .modal-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 24px;
+  padding: 1rem 1.5rem;
   background: #252526;
   border-top: 1px solid #3e3e42;
 }
 
 .footer-info {
   color: #858585;
-  font-size: 0.85rem;
+  font-size: 0.8125rem;
 }
 
 .btn-close {
-  background: #0e639c;
-  border: none;
-  color: white;
-  padding: 8px 20px;
-  border-radius: 6px;
+  background: #1a1a1a;
+  border: 1px solid #3e3e42;
+  color: #d4d4d4;
+  padding: 0.5rem 1.25rem;
+  border-radius: 4px;
   cursor: pointer;
   font-weight: 500;
+  font-size: 0.875rem;
   transition: all 0.2s;
 }
 
 .btn-close:hover {
-  background: #1177bb;
-  transform: translateY(-1px);
+  background: #3e3e42;
+  color: #fff;
 }
 
-/* ==================== TRANSITIONS ==================== */
+/* Transitions */
 .modal-enter-active,
 .modal-leave-active {
-  transition: opacity 0.3s ease;
+  transition: opacity 0.2s ease;
 }
 
 .modal-enter-from,
@@ -474,15 +451,15 @@ watch(() => props.isVisible, (newVal) => {
 
 .modal-enter-active .modal-container,
 .modal-leave-active .modal-container {
-  transition: transform 0.3s ease;
+  transition: transform 0.2s ease;
 }
 
 .modal-enter-from .modal-container,
 .modal-leave-to .modal-container {
-  transform: scale(0.9) translateY(-20px);
+  transform: scale(0.95);
 }
 
-/* ==================== RESPONSIVE ==================== */
+/* Responsive */
 @media (max-width: 768px) {
   .modal-container {
     width: 95%;
@@ -490,21 +467,21 @@ watch(() => props.isVisible, (newVal) => {
   }
   
   .modal-header {
-    padding: 16px;
+    padding: 1rem 1.25rem;
   }
   
   .header-left {
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 0.75rem;
   }
   
   .modal-header h3 {
-    font-size: 1.1rem;
+    font-size: 1rem;
   }
   
   .modal-toolbar {
     flex-direction: column;
-    gap: 12px;
+    gap: 0.75rem;
     align-items: stretch;
   }
   
@@ -519,12 +496,12 @@ watch(() => props.isVisible, (newVal) => {
   
   .line-numbers {
     min-width: 40px;
-    padding: 16px 8px;
+    padding: 1rem 0.5rem;
   }
   
   .code-content {
     font-size: 12px;
-    padding: 16px 12px;
+    padding: 1rem 0.75rem;
   }
 }
 </style>

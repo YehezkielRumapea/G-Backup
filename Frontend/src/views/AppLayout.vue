@@ -24,12 +24,6 @@
             <span class="nav-text">Manual Jobs</span>
           </router-link>
         </nav>
-        
-        <div class="header-actions">
-          <button @click="handleLogout" class="logout-btn">
-            <span>Logout</span>
-          </button>
-        </div>
       </div>
     </header>
     
