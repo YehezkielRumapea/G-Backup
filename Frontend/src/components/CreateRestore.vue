@@ -4,47 +4,65 @@
       <div class="modal-content">
         <!-- Header -->
         <div class="modal-header">
-          <h2>🔄 Restore Configuration</h2>
-          <button type="button" class="close-btn" @click="close">✕</button>
+          <h2>Restore Configuration</h2>
+          <button type="button" class="close-btn" @click="close">×</button>
         </div>
 
         <!-- Form & Messages -->
         <div class="restore-view">
-          <form @submit.prevent="handleRestoreSubmit" class="config-form restore-form">
-            <p>Download file dari cloud storage dan restore ke path lokal.</p>
+          <form @submit.prevent="handleRestoreSubmit" class="config-form">
+            <p class="form-description">Download file dari cloud storage dan restore ke path lokal.</p>
 
             <div class="form-group">
               <label for="restore-remote">Remote Name (Source) *</label>
-              <input type="text" id="restore-remote" v-model="restoreForm.remote_name" required placeholder="Gdrive1"/>
+              <input 
+                type="text" 
+                id="restore-remote" 
+                v-model="restoreForm.remote_name" 
+                required 
+                placeholder="Gdrive1"
+              />
             </div>
 
             <div class="form-group">
               <label for="restore-source">Source Path (Cloud) *</label>
-              <input type="text" id="restore-source" v-model="restoreForm.source_path" required placeholder="/backups/database/backup_20240110.sql.gz"/>
+              <input 
+                type="text" 
+                id="restore-source" 
+                v-model="restoreForm.source_path" 
+                required 
+                placeholder="/backups/database/backup_20240110.sql.gz"
+              />
             </div>
 
             <div class="form-group">
               <label for="restore-dest">Destination Path (Local Server) *</label>
-              <input type="text" id="restore-dest" v-model="restoreForm.destination_path" required placeholder="/home/user/restore/"/>
+              <input 
+                type="text" 
+                id="restore-dest" 
+                v-model="restoreForm.destination_path" 
+                required 
+                placeholder="/home/user/restore/"
+              />
             </div>
 
             <div class="form-actions">
-              <button type="submit" :disabled="isLoading" class="btn-submit btn-restore">
-                <span v-if="isLoading">⏳ Starting Restore...</span>
-                <span v-else>🔄 Start Restore</span>
+              <button type="submit" :disabled="isLoading" class="btn-submit">
+                <span v-if="isLoading">Starting Restore...</span>
+                <span v-else>Start Restore</span>
               </button>
             </div>
           </form>
 
           <transition name="fade">
             <div v-if="message" class="message success">
-              <span class="message-icon">✅</span>{{ message }}
+              {{ message }}
             </div>
           </transition>
 
           <transition name="fade">
             <div v-if="errorMessage" class="message error">
-              <span class="message-icon">❌</span>{{ errorMessage }}
+              {{ errorMessage }}
             </div>
           </transition>
         </div>
@@ -55,7 +73,7 @@
 
 <script setup>
 import { ref } from 'vue';
-import jobService from '@/services/jobService'; // Pastikan path ini benar
+import jobService from '@/services/jobService';
 import { useRouter } from 'vue-router';
 
 // Props & Emits
@@ -64,18 +82,14 @@ const props = defineProps({
 });
 const emit = defineEmits(['close', 'success']);
 
-
 const router = useRouter();
 const isLoading = ref(false);
 const errorMessage = ref(null);
 const message = ref(null);
 
-// Di dalam <script setup> CreateRestore.vue
-
-// Dan definisikan emits
 function close() {
   emit('close');
-};
+}
 
 const restoreForm = ref({
   remote_name: '',
@@ -93,10 +107,7 @@ async function handleRestoreSubmit() {
     message.value = response.message || 'Restore job started successfully!';
     emit('success');
 
-    // Tutup modal otomatis setelah 1,5 detik
     setTimeout(() => close(), 1500);
-
-    // Redirect jika mau ke logs (opsional)
     setTimeout(() => router.push('/logs'), 1500);
   } catch (error) {
     console.error('Create restore job error:', error);
@@ -108,150 +119,166 @@ async function handleRestoreSubmit() {
 </script>
 
 <style scoped>
-/* Anda mungkin perlu menyesuaikan `max-width` jika ini adalah komponen utama di halaman Anda */
-.restore-view {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 2rem;
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 999;
+  padding: 20px;
 }
 
-/* Form Styles */
-.config-form {
+.modal-content {
   background: #fff;
-  padding: 2rem;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  margin-bottom: 2rem;
+  border-radius: 8px;
+  border: 1px solid #e5e5e5;
+  width: 90%;
+  max-width: 600px;
+  position: relative;
 }
 
-.config-form h2 {
-  margin: 0 0 0.5rem 0;
+/* Header */
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 1.5rem;
+  background: #fafafa;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.close-btn {
+  background: transparent;
+  border: 1px solid #e5e5e5;
+  color: #666;
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  cursor: pointer;
   font-size: 1.5rem;
-  font-weight: 700;
-  color: #2c3e50;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
 }
 
-.config-form > p {
-  color: #6c757d;
-  margin: 0 0 2rem 0;
-  font-size: 0.95rem;
+.close-btn:hover {
+  background: #f5f5f5;
+  border-color: #1a1a1a;
+  color: #1a1a1a;
 }
 
-.restore-form {
-  border-top: 4px solid #3498db;
+/* Restore View */
+.restore-view {
+  max-width: 100%;
+}
+
+/* Form */
+.config-form {
+  padding: 1.5rem;
+}
+
+.form-description {
+  color: #666;
+  margin: 0 0 1.5rem 0;
+  font-size: 0.9375rem;
 }
 
 /* Form Group */
 .form-group {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
 }
 
 .form-group label {
   display: block;
   margin-bottom: 0.5rem;
-  font-weight: 600;
-  color: #2c3e50;
-  font-size: 0.95rem;
+  font-weight: 500;
+  color: #1a1a1a;
+  font-size: 0.875rem;
 }
 
-.form-group input[type="text"],
-.form-group input[type="number"],
-.form-group input[type="time"],
-.form-group select,
-.form-group textarea {
+.form-group input[type="text"] {
   width: 100%;
-  padding: 0.75rem;
-  border: 2px solid #e9ecef;
-  border-radius: 8px;
-  font-size: 0.95rem;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  font-size: 0.9375rem;
   transition: all 0.2s;
   box-sizing: border-box;
 }
 
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
+.form-group input:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-}
-
-.hint {
-  display: block;
-  margin-top: 0.5rem;
-  font-size: 0.85rem;
-  color: #6c757d;
+  border-color: #1a1a1a;
 }
 
 /* Form Actions */
 .form-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 1rem;
-  margin-top: 2rem;
-  padding-top: 1.5rem;
-  border-top: 2px solid #e9ecef;
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #e5e5e5;
 }
 
 .btn-submit {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #1a1a1a;
   color: white;
-  padding: 0.75rem 2rem;
+  padding: 0.625rem 1.5rem;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
-  font-weight: 600;
-  font-size: 1rem;
+  font-weight: 500;
+  font-size: 0.9375rem;
   transition: all 0.2s;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.btn-submit:hover:not(:disabled) {
+  background: #333;
 }
 
 .btn-submit:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
-  transform: none;
-}
-
-.btn-submit.btn-restore {
-  background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
-  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
-}
-
-.btn-submit.btn-restore:hover:not(:disabled) {
-  box-shadow: 0 6px 20px rgba(52, 152, 219, 0.4);
 }
 
 /* Messages */
 .message {
-  padding: 1rem 1.5rem;
-  border-radius: 8px;
-  margin-top: 1.5rem;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
+  padding: 0.875rem 1rem;
+  border-radius: 6px;
+  margin: 0 1.5rem 1.5rem;
   font-weight: 500;
+  font-size: 0.9375rem;
 }
 
 .message.success {
-  background: #d4edda;
-  color: #155724;
-  border-left: 4px solid #28a745;
+  background: #d1fae5;
+  color: #065f46;
+  border-left: 3px solid #22c55e;
 }
 
 .message.error {
-  background: #f8d7da;
-  color: #721c24;
-  border-left: 4px solid #dc3545;
-}
-
-.message-icon {
-  font-size: 1.5rem;
+  background: #fee2e2;
+  color: #991b1b;
+  border-left: 3px solid #ef4444;
 }
 
 /* Transitions */
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.3s;
+  transition: opacity 0.2s;
 }
 
 .fade-enter-from,
@@ -261,12 +288,12 @@ async function handleRestoreSubmit() {
 
 /* Responsive */
 @media (max-width: 768px) {
-  .restore-view {
-    padding: 1rem;
+  .modal-content {
+    width: 95%;
   }
   
   .config-form {
-    padding: 1.5rem;
+    padding: 1rem;
   }
   
   .form-actions {
@@ -276,50 +303,5 @@ async function handleRestoreSubmit() {
   .btn-submit {
     width: 100%;
   }
-}
-
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.4);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 999;
-}
-.modal-content {
-  background: #fff;
-  padding: 2rem;
-  border-radius: 12px;
-  width: 90%;
-  max-width: 900px;
-  position: relative;
-}
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-}
-.close-btn {
-  background: transparent;
-  border: none;
-  font-size: 1.2rem;
-  cursor: pointer;
-}
-
-/* --- Rest of styles copied dari RestoreForm --- */
-.restore-view {
-  max-width: 100%;
-}
-
-/* Transitions */
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.3s;
-}
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
 }
 </style>

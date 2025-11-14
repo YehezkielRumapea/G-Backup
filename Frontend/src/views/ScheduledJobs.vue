@@ -1,16 +1,12 @@
 <template>
   <div class="scheduled-jobs-view">
-    <div class="page-header">
+    <div class="header">
       <div>
-        <h1>⏰ Scheduled Jobs</h1>
-        <p>Memantau semua Job yang berjalan otomatis (CRON).</p>
+        <h1>Scheduled Jobs</h1>
+        <p class="subtitle">Memantau semua Job yang berjalan otomatis</p>
       </div>
-      <router-link to="/create" class="btn-add-job">
-        ➕ Buat Job Baru
-      </router-link>
     </div>
     
-    <!-- ⭐ Script Preview Modal dengan Syntax Highlighting -->
     <ScriptPreview
       :is-visible="isModalVisible"
       :job-id="currentJobId"
@@ -18,25 +14,20 @@
       @close="closeModal"
     />
 
-    <div v-if="isLoading" class="loading">
-      <div class="spinner"></div>
-      <p>Memuat data scheduled jobs...</p>
+    <div v-if="isLoading" class="status-message">
+      <span class="loading-dot"></span>
+      Memuat data...
     </div>
     
-    <div v-if="errorMessage" class="error-box">
-      <span class="error-icon">⚠️</span>
-      <div>
-        <strong>Error:</strong> {{ errorMessage }}
-        <button @click="fetchData" class="retry-btn">🔄 Coba Lagi</button>
-      </div>
+    <div v-if="errorMessage" class="status-message error">
+      {{ errorMessage }}
+      <button @click="fetchData" class="retry-btn">Coba Lagi</button>
     </div>
 
     <div v-if="!isLoading && jobs.length === 0 && !errorMessage" class="empty-state">
-      <div class="empty-icon">⏰</div>
-      <h3>Tidak Ada Job Terjadwal</h3>
-      <p>Belum ada job dengan jadwal otomatis yang dikonfigurasi.</p>
+      <p>Tidak ada job terjadwal</p>
       <router-link to="/create" class="btn-create">
-        ➕ Buat Job Terjadwal
+        Buat Job Terjadwal
       </router-link>
     </div>
 
@@ -73,18 +64,16 @@ import { ref, onMounted } from 'vue';
 import monitoringService from '@/services/monitoringService';
 import jobService from '@/services/jobService';
 import JobRow from '@/components/SchedJobRow.vue';
-import ScriptPreview from '@/components/ScriptPreview.vue'; // ⭐ Import
+import ScriptPreview from '@/components/ScriptPreview.vue';
 
 const jobs = ref([]);
 const isLoading = ref(true);
 const errorMessage = ref(null);
 
-// ⭐ State untuk Script Preview Modal
 const isModalVisible = ref(false);
 const currentScript = ref('');
 const currentJobId = ref(null);
 
-// Fetch data
 async function fetchData() {
   isLoading.value = true;
   errorMessage.value = null;
@@ -102,7 +91,6 @@ async function fetchData() {
 
 onMounted(fetchData);
 
-// Trigger job
 async function handleTrigger(jobId) {
   if (!confirm(`Apakah Anda yakin ingin menjalankan job ID ${jobId} sekarang?`)) {
     return;
@@ -110,53 +98,40 @@ async function handleTrigger(jobId) {
   
   try {
     await jobService.triggerJob(jobId);
-    
-    // Success notification
-    alert(`✅ Job ${jobId} berhasil di-trigger! Status akan diperbarui.`);
-    
-    // Reload data
+    alert(`Job ${jobId} berhasil di-trigger! Status akan diperbarui.`);
     fetchData();
   } catch (error) {
     const errorMsg = error.response?.data?.error || error.message || String(error);
-    alert(`❌ Gagal men-trigger job: ${errorMsg}`);
+    alert(`Gagal men-trigger job: ${errorMsg}`);
   }
 }
 
-// ⭐ View script dengan modal
 async function handleViewScript(jobId) {
   try {
-    // Show loading state
     isModalVisible.value = true;
     currentScript.value = 'Loading script...';
     currentJobId.value = jobId;
     
-    // Fetch script
     const data = await jobService.getJobScript(jobId);
-    
-    // Update content
     currentScript.value = data.script_preview || data.script || 'No script available';
   } catch (error) {
-    // Close modal and show error
     isModalVisible.value = false;
-    
     const errorMsg = error.response?.data?.error || error.message;
-    alert(`❌ Gagal memuat script: ${errorMsg}`);
+    alert(`Gagal memuat script: ${errorMsg}`);
   }
 }
 
 async function handleDeleteJob(jobId) {
     try {
-        // Panggil service API DELETE
         await jobService.deleteJob(jobId); 
-        alert(`✅ Job ID ${jobId} berhasil dihapus.`);
+        alert(`Job ID ${jobId} berhasil dihapus.`);
         fetchData();
     } catch (error) {
         const errorMsg = error.response?.data?.error || "Gagal menghapus job.";
-        alert(`❌ Gagal menghapus job: ${errorMsg}`);
+        alert(`Gagal menghapus job: ${errorMsg}`);
     }
 }
 
-// Close modal
 function closeModal() {
   isModalVisible.value = false;
   currentScript.value = '';
@@ -166,216 +141,183 @@ function closeModal() {
 
 <style scoped>
 .scheduled-jobs-view {
-  padding: 2rem;
   max-width: 1400px;
   margin: 0 auto;
+  padding: 2rem 1.5rem;
 }
 
-/* Page Header */
-.page-header {
+.header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 2rem;
-  flex-wrap: wrap;
+  margin-bottom: 2.5rem;
   gap: 1rem;
 }
 
-.page-header h1 {
-  font-size: 2rem;
-  font-weight: 700;
-  color: #2c3e50;
+h1 {
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: #1a1a1a;
   margin: 0 0 0.5rem 0;
+  letter-spacing: -0.02em;
 }
 
-.page-header p {
-  color: #6c757d;
+.subtitle {
+  font-size: 0.95rem;
+  color: #666;
   margin: 0;
-  font-size: 1rem;
+  font-weight: 400;
 }
 
-.btn-add-job {
+.btn-add {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #1a1a1a;
   color: white;
-  padding: 0.75rem 1.5rem;
-  border-radius: 8px;
+  padding: 0.625rem 1.125rem;
+  border-radius: 6px;
   text-decoration: none;
-  font-weight: 600;
-  transition: all 0.3s;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  font-weight: 500;
+  font-size: 0.9375rem;
+  transition: all 0.2s;
   white-space: nowrap;
 }
 
-.btn-add-job:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+.btn-add:hover {
+  background: #333;
 }
 
-/* Loading State */
-.loading {
+.status-message {
+  padding: 1rem;
+  border-radius: 6px;
+  font-size: 0.9375rem;
+  background: #f8f8f8;
+  color: #666;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 3rem;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #667eea;
+.status-message.error {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fee2e2;
+  justify-content: space-between;
+}
+
+.loading-dot {
+  width: 8px;
+  height: 8px;
+  background: #666;
   border-radius: 50%;
-  animation: spin 1s linear infinite;
+  animation: pulse 1.5s ease-in-out infinite;
 }
 
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-/* Error Box */
-.error-box {
-  background: #fee;
-  border: 1px solid #fcc;
-  border-radius: 8px;
-  padding: 1rem 1.5rem;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.error-icon {
-  font-size: 1.5rem;
-}
-
-.error-box strong {
-  color: #c33;
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }
 
 .retry-btn {
-  background: #dc3545;
-  color: white;
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
+  background: transparent;
+  border: 1px solid #dc2626;
+  color: #dc2626;
+  padding: 0.375rem 0.875rem;
+  border-radius: 4px;
   cursor: pointer;
-  font-size: 0.9rem;
-  margin-left: 1rem;
+  font-size: 0.875rem;
   transition: all 0.2s;
 }
 
 .retry-btn:hover {
-  background: #c82333;
-  transform: translateY(-1px);
+  background: #dc2626;
+  color: white;
 }
 
-/* Empty State */
 .empty-state {
   text-align: center;
-  padding: 4rem 2rem;
-}
-
-.empty-icon {
-  font-size: 4rem;
-  margin-bottom: 1rem;
-  opacity: 0.5;
-}
-
-.empty-state h3 {
-  font-size: 1.5rem;
-  color: #2c3e50;
-  margin-bottom: 0.5rem;
+  padding: 3rem 1rem;
 }
 
 .empty-state p {
-  color: #6c757d;
-  margin-bottom: 2rem;
+  color: #999;
+  font-size: 0.9375rem;
+  margin-bottom: 1.5rem;
 }
 
 .btn-create {
   display: inline-block;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #1a1a1a;
   color: white;
-  padding: 0.75rem 1.5rem;
-  border-radius: 8px;
+  padding: 0.625rem 1.125rem;
+  border-radius: 6px;
   text-decoration: none;
-  font-weight: 600;
-  transition: all 0.3s;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  font-weight: 500;
+  font-size: 0.9375rem;
+  transition: all 0.2s;
 }
 
 .btn-create:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+  background: #333;
 }
 
-/* Table Container */
 .table-container {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
   overflow: hidden;
 }
 
 .jobs-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9rem;
 }
 
 .jobs-table thead {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: #fafafa;
 }
 
 .jobs-table th {
-  padding: 1rem 1.25rem;
+  padding: 0.875rem 1rem;
   text-align: left;
+  font-size: 0.8125rem;
   font-weight: 600;
-  letter-spacing: 0.5px;
+  color: #666;
   text-transform: uppercase;
-  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid #e5e5e5;
 }
 
 .jobs-table td {
-  padding: 1rem 1.25rem;
+  padding: 1rem;
   border-bottom: 1px solid #f0f0f0;
-}
-
-.jobs-table tbody tr {
-  transition: background-color 0.2s;
-}
-
-.jobs-table tbody tr:hover {
-  background-color: #f8f9fa;
+  font-size: 0.9375rem;
+  color: #333;
 }
 
 .jobs-table tbody tr:last-child td {
   border-bottom: none;
 }
 
-/* Responsive */
+.jobs-table tbody tr:hover {
+  background: #fafafa;
+}
+
 @media (max-width: 768px) {
   .scheduled-jobs-view {
-    padding: 1rem;
+    padding: 1.5rem 1rem;
   }
   
-  .page-header {
+  .header {
     flex-direction: column;
     align-items: stretch;
   }
   
-  .page-header h1 {
+  h1 {
     font-size: 1.5rem;
   }
   
-  .btn-add-job {
+  .btn-add {
     justify-content: center;
   }
   
@@ -384,12 +326,7 @@ function closeModal() {
   }
   
   .jobs-table {
-    font-size: 0.85rem;
-  }
-  
-  .jobs-table th,
-  .jobs-table td {
-    padding: 0.75rem;
+    min-width: 800px;
   }
 }
 </style>

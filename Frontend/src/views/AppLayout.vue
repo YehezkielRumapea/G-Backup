@@ -1,49 +1,39 @@
 <template>
   <div class="app-layout">
-    <!-- Header (sama seperti sebelumnya) -->
+    <!-- Header -->
     <header class="app-header">
       <div class="header-content">
         <div class="logo">
-          <h1>☁️ G-Backup</h1>
+          <h1>G-Backup</h1>
         </div>
         
         <nav class="main-nav">
           <router-link to="/dashboard" class="nav-item">
-            <span class="nav-icon">📊</span>
             <span class="nav-text">Dashboard</span>
           </router-link>
           
           <router-link to="/remotes" class="nav-item">
-            <span class="nav-icon">☁️</span>
             <span class="nav-text">Remotes</span>
           </router-link>
           
           <router-link to="/scheduled" class="nav-item">
-            <span class="nav-icon">⏰</span>
             <span class="nav-text">Scheduled Jobs</span>
           </router-link>
           
           <router-link to="/manual" class="nav-item">
-            <span class="nav-icon">🔧</span>
             <span class="nav-text">Manual Jobs</span>
           </router-link>
-          
-          <!-- <router-link to="/logs" class="nav-item">
-            <span class="nav-icon">📝</span>
-            <span class="nav-text">Logs</span>
-          </router-link> -->
         </nav>
         
         <div class="header-actions">
           <button @click="handleLogout" class="logout-btn">
-            <span>🚪</span>
             <span>Logout</span>
           </button>
         </div>
       </div>
     </header>
     
-    <!-- ⭐ Main Content dengan Log Panel -->
+    <!-- Main Content dengan Log Panel -->
     <div class="content-wrapper">
       <!-- Main Content -->
       <main class="app-main">
@@ -52,7 +42,7 @@
         </transition>
       </main>
       
-      <!-- ⭐ Log Panel (Sticky di kanan) -->
+      <!-- Log Panel (Sticky di kanan) -->
       <aside class="log-panel">
         <SimpleLiveLog />
       </aside>
@@ -60,7 +50,7 @@
     
     <!-- Footer -->
     <footer class="app-footer">
-      <p>© 2024 G-Backup System | Powered by Vue.js & Golang</p>
+      <p>© 2024 G-Backup System</p>
     </footer>
   </div>
 </template>
@@ -68,7 +58,7 @@
 <script setup>
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/authStore';
-import SimpleLiveLog from '@/components/LiveLog.vue'; // ⭐ Import
+import SimpleLiveLog from '@/components/LiveLog.vue';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -86,14 +76,13 @@ const handleLogout = () => {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  background-color: #f5f7fa;
+  background-color: #fafafa;
 }
 
-/* Header (sama seperti sebelumnya) */
+/* Header */
 .app-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: #fff;
+  border-bottom: 1px solid #e5e5e5;
   position: sticky;
   top: 0;
   z-index: 100;
@@ -110,14 +99,16 @@ const handleLogout = () => {
 
 .logo h1 {
   margin: 0;
-  font-size: 1.5rem;
-  font-weight: 700;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1a1a1a;
   white-space: nowrap;
+  letter-spacing: -0.02em;
 }
 
 .main-nav {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.25rem;
   flex: 1;
   overflow-x: auto;
 }
@@ -125,33 +116,29 @@ const handleLogout = () => {
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  color: white;
+  padding: 0.625rem 1rem;
+  color: #666;
   text-decoration: none;
-  border-radius: 8px;
+  border-radius: 6px;
   transition: all 0.2s ease;
   white-space: nowrap;
   font-weight: 500;
+  font-size: 0.9375rem;
 }
 
 .nav-item:hover {
-  background: rgba(255, 255, 255, 0.15);
-  transform: translateY(-2px);
+  background: #f5f5f5;
+  color: #1a1a1a;
 }
 
 .nav-item.router-link-active {
-  background: rgba(255, 255, 255, 0.25);
-  font-weight: 600;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-}
-
-.nav-icon {
-  font-size: 1.2rem;
+  background: #1a1a1a;
+  color: white;
+  font-weight: 500;
 }
 
 .nav-text {
-  font-size: 0.9rem;
+  font-size: 0.9375rem;
 }
 
 .header-actions {
@@ -162,29 +149,29 @@ const handleLogout = () => {
 .logout-btn {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.25rem;
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 8px;
+  padding: 0.625rem 1rem;
+  background: transparent;
+  color: #666;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 500;
+  font-size: 0.9375rem;
   transition: all 0.2s ease;
   white-space: nowrap;
 }
 
 .logout-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  background: #f5f5f5;
+  color: #1a1a1a;
+  border-color: #1a1a1a;
 }
 
-/* ⭐ Content Wrapper dengan Log Panel */
+/* Content Wrapper dengan Log Panel */
 .content-wrapper {
   flex: 1;
   display: grid;
-  grid-template-columns: 1fr 320px; /* Main content + Log panel (320px) */
+  grid-template-columns: 1fr 320px;
   gap: 1.5rem;
   padding: 1.5rem 2rem;
   max-width: 100%;
@@ -192,30 +179,29 @@ const handleLogout = () => {
 
 /* Main Content */
 .app-main {
-  min-width: 0; /* Prevent overflow */
+  min-width: 0;
 }
 
-/* ⭐ Log Panel (Sticky) */
+/* Log Panel (Sticky) */
 .log-panel {
   position: sticky;
-  top: calc(70px + 1.5rem); /* Header height + padding */
-  height: calc(100vh - 70px - 3rem - 60px); /* Viewport - header - padding - footer */
+  top: calc(60px + 1.5rem);
+  height: calc(100vh - 60px - 3rem - 60px);
   min-width: 0;
 }
 
 /* Footer */
 .app-footer {
-  background: #2c3e50;
-  color: white;
-  padding: 1.5rem 2rem;
+  background: #fff;
+  border-top: 1px solid #e5e5e5;
+  padding: 1.25rem 2rem;
   text-align: center;
-  border-top: 3px solid #667eea;
 }
 
 .app-footer p {
   margin: 0;
-  font-size: 0.9rem;
-  opacity: 0.8;
+  font-size: 0.875rem;
+  color: #666;
 }
 
 /* Transitions */
@@ -229,14 +215,14 @@ const handleLogout = () => {
   opacity: 0;
 }
 
-/* ⭐ Responsive - Hide log panel on smaller screens */
+/* Responsive - Hide log panel on smaller screens */
 @media (max-width: 1200px) {
   .content-wrapper {
-    grid-template-columns: 1fr; /* Single column */
+    grid-template-columns: 1fr;
   }
   
   .log-panel {
-    display: none; /* Hide on smaller screens */
+    display: none;
   }
 }
 
@@ -244,19 +230,13 @@ const handleLogout = () => {
   .header-content {
     flex-direction: column;
     gap: 1rem;
+    align-items: stretch;
   }
   
   .main-nav {
     width: 100%;
     justify-content: center;
   }
-  
-  .nav-text {
-    display: none;
-  }
-  
-  .nav-item {
-    padding: 0.75rem;}
 }
 
 @media (max-width: 768px) {
@@ -269,15 +249,32 @@ const handleLogout = () => {
   }
   
   .logo h1 {
-    font-size: 1.2rem;
+    font-size: 1.125rem;
   }
   
   .main-nav {
     gap: 0.25rem;
+    overflow-x: auto;
   }
   
-  .logout-btn span:last-child {
-    display: none;
+  .nav-item {
+    font-size: 0.875rem;
+    padding: 0.5rem 0.875rem;
+  }
+  
+  .logout-btn {
+    font-size: 0.875rem;
+    padding: 0.5rem 0.875rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .nav-text {
+    font-size: 0.8125rem;
+  }
+  
+  .main-nav {
+    justify-content: flex-start;
   }
 }
 </style>

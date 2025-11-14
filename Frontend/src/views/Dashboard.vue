@@ -1,15 +1,14 @@
 <template>
   <div class="dashboard-container">
     <!-- Page Header -->
-    <div class="page-header">
-      <h1>📊 Dashboard</h1>
-      <p>Overview sistem backup dan monitoring activity</p>
+    <div class="header">
+      <h1>Dashboard</h1>
+      <p class="subtitle">Overview sistem backup dan monitoring activity</p>
     </div>
 
     <!-- Stats Cards -->
     <div class="stats-grid">
       <div class="stat-card">
-        <div class="stat-icon">☁️</div>
         <div class="stat-content">
           <span class="stat-label">Total Remote</span>
           <span class="stat-value">{{ totalRemotes }}</span>
@@ -17,7 +16,6 @@
       </div>
 
       <div class="stat-card">
-        <div class="stat-icon">⚙️</div>
         <div class="stat-content">
           <span class="stat-label">Total Job</span>
           <span class="stat-value">{{ totalJobs }}</span>
@@ -26,34 +24,36 @@
     </div>
 
     <!-- Quick Action Section -->
-    <div class="quick-action-section">
-      <h2>⚡ Quick Action</h2>
-      <p>Start backup or restore job instantly</p>
+    <div class="section">
+      <h2>Quick Action</h2>
+      <p class="section-subtitle">Start backup or restore job instantly</p>
       
       <div class="action-cards">
-        <div class="action-card backup" @click="openBackupModal">
-          <div class="action-icon">📦</div>
-          <h3>Create Backup</h3>
-          <p>Start manual backup job</p>
-          <div class="action-arrow">→</div>
-        </div>
+        <button class="action-card" @click="openBackupModal">
+          <div class="action-content">
+            <h3>Create Backup</h3>
+            <p>Start manual backup job</p>
+          </div>
+          <span class="action-arrow">→</span>
+        </button>
 
-        <div class="action-card restore" @click="openRestoreModal">
-          <div class="action-icon">🔄</div>
-          <h3>Start Restore</h3>
-          <p>Restore from cloud backup</p>
-          <div class="action-arrow">→</div>
-        </div>
+        <button class="action-card" @click="openRestoreModal">
+          <div class="action-content">
+            <h3>Start Restore</h3>
+            <p>Restore from cloud backup</p>
+          </div>
+          <span class="action-arrow">→</span>
+        </button>
       </div>
     </div>
 
     <!-- Next Job Section -->
-    <div class="next-job-section">
-      <h2>⏰ Next Scheduled Job</h2>
+    <div class="section">
+      <h2>Next Scheduled Job</h2>
       
-      <div v-if="isLoadingJobs" class="loading-box">
-        <div class="spinner"></div>
-        <p>Loading jobs...</p>
+      <div v-if="isLoadingJobs" class="status-message">
+        <span class="loading-dot"></span>
+        Loading jobs...
       </div>
 
       <div v-else-if="nextJob" class="next-job-card">
@@ -64,18 +64,17 @@
         <h3>{{ nextJob.name }}</h3>
         <div class="job-details">
           <div class="detail-item">
-            <span class="detail-label">Remote:</span>
+            <span class="detail-label">Remote</span>
             <span class="detail-value">{{ nextJob.remoteName }}</span>
           </div>
           <div class="detail-item">
-            <span class="detail-label">Schedule:</span>
+            <span class="detail-label">Schedule</span>
             <span class="detail-value">{{ nextJob.scheduleCron }}</span>
           </div>
         </div>
       </div>
 
-      <div v-else class="empty-box">
-        <span class="empty-icon">📅</span>
+      <div v-else class="empty-state">
         <p>No scheduled jobs</p>
       </div>
     </div>
@@ -143,7 +142,6 @@ async function fetchData() {
     jobs.value = Array.isArray(jobsData) ? jobsData : [];
   } catch (error) {
     console.error('Failed to fetch dashboard data:', error);
-    errorMsg.value = 'Gagal memuat data. Cek koneksi API.';
   } finally {
     isLoadingJobs.value = false;
   }
@@ -159,7 +157,7 @@ function openRestoreModal() {
 
 function handleBackupSuccess() {
   showBackupModal.value = false;
-  fetchData(); // Refresh data
+  fetchData();
 }
 
 function handleRestoreSuccess() {
@@ -196,220 +194,175 @@ function formatNextRun(timestamp) {
 
 <style scoped>
 .dashboard-container {
-  max-width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
 }
 
 /* Page Header */
-.page-header {
-  margin-bottom: 2rem;
+.header {
+  margin-bottom: 2.5rem;
 }
 
-.page-header h1 {
-  font-size: 2rem;
-  font-weight: 700;
-  color: #2c3e50;
+h1 {
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: #1a1a1a;
   margin: 0 0 0.5rem 0;
+  letter-spacing: -0.02em;
 }
 
-.page-header p {
-  color: #6c757d;
+.subtitle {
+  font-size: 0.95rem;
+  color: #666;
   margin: 0;
-  font-size: 1rem;
+  font-weight: 400;
 }
 
 /* Stats Grid */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1.5rem;
+  gap: 1rem;
   margin-bottom: 2rem;
 }
 
 .stat-card {
   background: white;
   padding: 1.5rem;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  transition: all 0.3s;
-}
-
-.stat-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-}
-
-.stat-icon {
-  font-size: 2.5rem;
-  line-height: 1;
+  border-radius: 8px;
+  border: 1px solid #e5e5e5;
 }
 
 .stat-content {
   display: flex;
   flex-direction: column;
+  gap: 0.5rem;
 }
 
 .stat-label {
-  font-size: 0.85rem;
-  color: #6c757d;
+  font-size: 0.8125rem;
+  color: #666;
   font-weight: 500;
-  margin-bottom: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .stat-value {
   font-size: 2rem;
-  font-weight: 700;
-  color: #2c3e50;
+  font-weight: 600;
+  color: #1a1a1a;
   line-height: 1;
 }
 
-/* Quick Action Section */
-.quick-action-section {
+/* Section */
+.section {
   background: white;
-  padding: 2rem;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  margin-bottom: 2rem;
+  padding: 1.5rem;
+  border-radius: 8px;
+  border: 1px solid #e5e5e5;
+  margin-bottom: 1.5rem;
 }
 
-.quick-action-section h2 {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #2c3e50;
-  margin: 0 0 0.5rem 0;
+.section h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 0.25rem 0;
 }
 
-.quick-action-section > p {
-  color: #6c757d;
+.section-subtitle {
+  font-size: 0.875rem;
+  color: #666;
   margin: 0 0 1.5rem 0;
 }
 
+/* Action Cards */
 .action-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
 .action-card {
-  position: relative;
-  padding: 2rem;
-  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  background: white;
   cursor: pointer;
-  transition: all 0.3s;
-  overflow: hidden;
-}
-
-.action-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  opacity: 0.1;
-  transition: opacity 0.3s;
-}
-
-.action-card.backup {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-}
-
-.action-card.restore {
-  background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
-  color: white;
+  transition: all 0.2s;
+  text-align: left;
+  width: 100%;
 }
 
 .action-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  background: #fafafa;
+  border-color: #1a1a1a;
 }
 
-.action-card:hover::before {
-  opacity: 0.2;
+.action-content h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 0.25rem 0;
 }
 
-.action-icon {
-  font-size: 3rem;
-  margin-bottom: 1rem;
-  line-height: 1;
-}
-
-.action-card h3 {
-  font-size: 1.25rem;
-  font-weight: 700;
-  margin: 0 0 0.5rem 0;
-}
-
-.action-card p {
+.action-content p {
   margin: 0;
-  opacity: 0.9;
-  font-size: 0.95rem;
+  font-size: 0.875rem;
+  color: #666;
 }
 
 .action-arrow {
-  position: absolute;
-  bottom: 1.5rem;
-  right: 1.5rem;
-  font-size: 1.5rem;
-  transition: transform 0.3s;
+  font-size: 1.25rem;
+  color: #666;
+  transition: transform 0.2s;
 }
 
 .action-card:hover .action-arrow {
   transform: translateX(4px);
+  color: #1a1a1a;
 }
 
-/* Next Job Section */
-.next-job-section {
-  background: white;
-  padding: 2rem;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-.next-job-section h2 {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #2c3e50;
-  margin: 0 0 1.5rem 0;
-}
-
+/* Next Job Card */
 .next-job-card {
-  background: #f8f9fa;
-  padding: 1.5rem;
-  border-radius: 8px;
-  border-left: 4px solid #667eea;
+  background: #fafafa;
+  padding: 1.25rem;
+  border-radius: 6px;
+  border-left: 3px solid #1a1a1a;
 }
 
 .job-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
+  margin-bottom: 0.875rem;
 }
 
 .job-type-badge {
-  background: #667eea;
+  background: #1a1a1a;
   color: white;
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 0.8rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .job-time {
-  color: #6c757d;
-  font-weight: 600;
-  font-size: 0.9rem;
+  color: #666;
+  font-weight: 500;
+  font-size: 0.875rem;
 }
 
 .next-job-card h3 {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #2c3e50;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1a1a1a;
   margin: 0 0 1rem 0;
 }
 
@@ -426,61 +379,64 @@ function formatNextRun(timestamp) {
 }
 
 .detail-label {
-  font-size: 0.8rem;
-  color: #6c757d;
+  font-size: 0.75rem;
+  color: #666;
   font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .detail-value {
-  font-size: 0.95rem;
-  color: #2c3e50;
-  font-weight: 600;
+  font-size: 0.9375rem;
+  color: #1a1a1a;
+  font-weight: 500;
   font-family: monospace;
 }
 
-/* Loading & Empty States */
-.loading-box,
-.empty-box {
+/* Status Message */
+.status-message {
+  padding: 1rem;
+  border-radius: 6px;
+  font-size: 0.9375rem;
+  background: #f8f8f8;
+  color: #666;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 3rem 2rem;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #667eea;
+.loading-dot {
+  width: 8px;
+  height: 8px;
+  background: #666;
   border-radius: 50%;
-  animation: spin 1s linear infinite;
+  animation: pulse 1.5s ease-in-out infinite;
 }
 
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }
 
-.empty-icon {
-  font-size: 3rem;
-  opacity: 0.3;
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 2rem 1rem;
 }
 
-.loading-box p,
-.empty-box p {
+.empty-state p {
   margin: 0;
-  color: #6c757d;
+  color: #999;
+  font-size: 0.9375rem;
 }
 
 /* Responsive */
 @media (max-width: 768px) {
   .dashboard-container {
-    padding: 1rem;
+    padding: 1.5rem 1rem;
   }
   
-  .page-header h1 {
+  h1 {
     font-size: 1.5rem;
   }
   

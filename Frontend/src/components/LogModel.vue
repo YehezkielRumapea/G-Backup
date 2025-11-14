@@ -1,59 +1,70 @@
 <template>
   <Teleport to="body">
     <Transition name="modal">
-      <div v-if="isVisible && log" class="modal-overlay" @click.self="close">
-        <div class="modal-content">
+      <div v-if="isVisible && log" class="modal-overlay" @click.self="handleClose">
+        <div class="modal-container">
           <!-- Header -->
           <div class="modal-header">
-            <h3>📝 Log Detail</h3>
-            <button @click="close" class="close-btn">×</button>
+            <div class="header-left">
+              <h3>Log Details</h3>
+              <span class="log-id">ID: {{ log.ID }}</span>
+            </div>
+            <button @click="handleClose" class="close-btn">×</button>
           </div>
 
-          <!-- Body -->
+          <!-- Content -->
           <div class="modal-body">
-            <div class="detail-row">
-              <span class="label">Job Name:</span>
-              <span class="value">{{ getJobName(log) }}</span>
+            <!-- Job Info -->
+            <div class="info-section">
+              <h4>Job Information</h4>
+              <div class="info-grid">
+                <div class="info-item">
+                  <span class="label">Job ID</span>
+                  <span class="value">{{ log.JobID || 'Manual Job' }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="label">Job Name</span>
+                  <span class="value">{{ getJobName(log) }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="label">Status</span>
+                  <span class="value">
+                    <span class="status-badge" :class="getStatusClass(log.Status)">
+                      {{ log.Status }}
+                    </span>
+                  </span>
+                </div>
+                <div class="info-item">
+                  <span class="label">Duration</span>
+                  <span class="value">{{ log.DurationSec }} seconds</span>
+                </div>
+                <div class="info-item">
+                  <span class="label">Timestamp</span>
+                  <span class="value">{{ formatFullTimestamp(log.Timestamp) }}</span>
+                </div>
+              </div>
             </div>
 
-            <div class="detail-row">
-              <span class="label">Job ID:</span>
-              <span class="value">{{ log.JobID || 'Manual' }}</span>
+            <!-- Output Message -->
+            <div class="info-section">
+              <h4>Output Message</h4>
+              <div class="output-box">
+                <pre>{{ log.Message || 'No message available' }}</pre>
+              </div>
             </div>
 
-            <div class="detail-row">
-              <span class="label">Operation:</span>
-              <span class="value">{{ log.OperationType || 'N/A' }}</span>
-            </div>
-
-            <div class="detail-row">
-              <span class="label">Status:</span>
-              <span class="value">
-                <span class="status-badge" :class="getStatusClass(log.Status)">
-                  {{ getStatusIcon(log.Status) }} {{ log.Status }}
-                </span>
-              </span>
-            </div>
-
-            <div class="detail-row">
-              <span class="label">Duration:</span>
-              <span class="value">{{ log.DurationSec }} seconds</span>
-            </div>
-
-            <div class="detail-row">
-              <span class="label">Timestamp:</span>
-              <span class="value">{{ formatFullDate(log.Timestamp) }}</span>
-            </div>
-
-            <div class="detail-section">
-              <span class="label">Message:</span>
-              <pre class="message-box">{{ log.Message || 'No message' }}</pre>
+            <!-- Config Snapshot (if manual job) -->
+            <div v-if="log.ConfigSnapshot" class="info-section">
+              <h4>Configuration Snapshot</h4>
+              <div class="config-box">
+                <pre>{{ formatJSON(log.ConfigSnapshot) }}</pre>
+              </div>
             </div>
           </div>
 
           <!-- Footer -->
           <div class="modal-footer">
-            <button @click="close" class="btn-close">Close</button>
+            <button @click="handleClose" class="btn-close">Close</button>
           </div>
         </div>
       </div>
@@ -69,7 +80,7 @@ const props = defineProps({
 
 const emit = defineEmits(['close']);
 
-function close() {
+function handleClose() {
   emit('close');
 }
 
@@ -83,42 +94,44 @@ function getJobName(log) {
       return 'Manual Job';
     }
   }
-  return 'Unknown';
+  return 'Unknown Job';
 }
 
 function getStatusClass(status) {
   const s = status.toUpperCase();
-  if (['SUCCESS', 'COMPLETED'].includes(s)) return 'success';
-  if (s.includes('FAIL') || s === 'ERROR') return 'failed';
-  if (s === 'RUNNING') return 'running';
-  return 'pending';
+  if (['SUCCESS', 'COMPLETED'].includes(s)) return 'status-success';
+  if (s.includes('FAIL') || s === 'ERROR') return 'status-failed';
+  if (s === 'RUNNING') return 'status-running';
+  return 'status-default';
 }
 
-function getStatusIcon(status) {
-  const s = status.toUpperCase();
-  if (['SUCCESS', 'COMPLETED'].includes(s)) return '✅';
-  if (s.includes('FAIL') || s === 'ERROR') return '❌';
-  if (s === 'RUNNING') return '⏳';
-  return '⏱️';
-}
-
-function formatFullDate(timestamp) {
+function formatFullTimestamp(timestamp) {
   try {
     return new Date(timestamp).toLocaleString('id-ID');
   } catch (e) {
     return timestamp;
   }
 }
+
+function formatJSON(jsonString) {
+  try {
+    return JSON.stringify(JSON.parse(jsonString), null, 2);
+  } catch (e) {
+    return jsonString;
+  }
+}
 </script>
 
 <style scoped>
+/* Modal overlay */
 .modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -126,162 +139,282 @@ function formatFullDate(timestamp) {
   padding: 20px;
 }
 
-.modal-content {
-  background: white;
-  border-radius: 12px;
+.modal-container {
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #e5e5e5;
   width: 90%;
-  max-width: 600px;
-  max-height: 80vh;
+  max-width: 900px;
+  max-height: 90vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
 }
 
+/* Header */
 .modal-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: 1.25rem 1.5rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-radius: 12px 12px 0 0;
+  padding: 1.25rem 1.5rem;
+  background: #fafafa;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
 }
 
 .modal-header h3 {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.log-id {
+  background: #f0f0f0;
+  padding: 0.25rem 0.625rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #666;
 }
 
 .close-btn {
-  background: rgba(255, 255, 255, 0.2);
-  border: none;
-  color: white;
-  width: 36px;
-  height: 36px;
-  border-radius: 6px;
+  background: transparent;
+  border: 1px solid #e5e5e5;
+  color: #666;
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
   cursor: pointer;
-  font-size: 1.8rem;
-  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: all 0.2s;
+  font-size: 1.5rem;
+  line-height: 1;
 }
 
 .close-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: #f5f5f5;
+  border-color: #1a1a1a;
+  color: #1a1a1a;
 }
 
+/* Body */
 .modal-body {
   flex: 1;
   overflow-y: auto;
   padding: 1.5rem;
+  background: #fafafa;
 }
 
-.detail-row {
-  display: flex;
-  padding: 0.75rem 0;
-  border-bottom: 1px solid #f0f0f0;
+.modal-body::-webkit-scrollbar {
+  width: 8px;
 }
 
-.detail-row:last-of-type {
-  border-bottom: none;
+.modal-body::-webkit-scrollbar-track {
+  background: #f0f0f0;
 }
 
-.detail-section {
+.modal-body::-webkit-scrollbar-thumb {
+  background: #d4d4d4;
+  border-radius: 4px;
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover {
+  background: #a3a3a3;
+}
+
+/* Info Sections */
+.info-section {
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #e5e5e5;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.info-section:last-child {
+  margin-bottom: 0;
+}
+
+.info-section h4 {
+  margin: 0 0 1rem 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #e5e5e5;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Info Grid */
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+}
+
+.info-item {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  padding: 0.75rem 0;
-  border-top: 2px solid #e9ecef;
-  margin-top: 0.75rem;
+  gap: 0.375rem;
 }
 
-.label {
+.info-item .label {
+  font-size: 0.75rem;
+  color: #666;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.info-item .value {
+  font-size: 0.9375rem;
+  color: #1a1a1a;
+  font-weight: 500;
+}
+
+.info-item .value.operation {
+  color: #1a1a1a;
+  text-transform: uppercase;
   font-weight: 600;
-  color: #6c757d;
-  min-width: 120px;
-  font-size: 0.9rem;
 }
 
-.value {
-  color: #2c3e50;
-  font-size: 0.9rem;
-}
-
+/* Status Badge */
 .status-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 4px 10px;
-  border-radius: 12px;
+  padding: 0.25rem 0.625rem;
+  border-radius: 4px;
   font-weight: 600;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
-.status-badge.success {
-  background: #d4edda;
-  color: #155724;
+.status-success {
+  background: #d1fae5;
+  color: #065f46;
 }
 
-.status-badge.failed {
-  background: #f8d7da;
-  color: #721c24;
+.status-failed {
+  background: #fee2e2;
+  color: #991b1b;
 }
 
-.status-badge.running {
-  background: #fff3cd;
-  color: #856404;
+.status-running {
+  background: #fef3c7;
+  color: #92400e;
 }
 
-.status-badge.pending {
-  background: #e2e3e5;
-  color: #383d41;
+.status-default {
+  background: #e5e7eb;
+  color: #374151;
 }
 
-.message-box {
-  background: #1e1e1e;
-  color: #d4d4d4;
-  padding: 1rem;
+/* Output Box */
+.output-box,
+.config-box {
+  background: #1a1a1a;
   border-radius: 6px;
-  font-family: 'Consolas', monospace;
-  font-size: 0.85rem;
-  line-height: 1.5;
+  padding: 1rem;
+  overflow-x: auto;
+}
+
+.output-box pre,
+.config-box pre {
+  margin: 0;
+  color: #d4d4d4;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 0.8125rem;
+  line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
-  margin: 0;
-  max-height: 200px;
-  overflow-y: auto;
 }
 
+/* Footer */
 .modal-footer {
   padding: 1rem 1.5rem;
-  background: #f8f9fa;
-  border-top: 1px solid #e9ecef;
+  background: white;
+  border-top: 1px solid #e5e5e5;
   display: flex;
   justify-content: flex-end;
-  border-radius: 0 0 12px 12px;
 }
 
 .btn-close {
-  background: #667eea;
+  background: #1a1a1a;
   color: white;
   border: none;
-  padding: 0.75rem 1.5rem;
+  padding: 0.625rem 1.5rem;
   border-radius: 6px;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 500;
+  font-size: 0.9375rem;
   transition: all 0.2s;
 }
 
 .btn-close:hover {
-  background: #5568d3;
+  background: #333;
 }
 
+/* Transitions */
 .modal-enter-active,
 .modal-leave-active {
-  transition: opacity 0.3s;
+  transition: opacity 0.2s ease;
 }
 
 .modal-enter-from,
 .modal-leave-to {
   opacity: 0;
+}
+
+.modal-enter-active .modal-container,
+.modal-leave-active .modal-container {
+  transition: transform 0.2s ease;
+}
+
+.modal-enter-from .modal-container,
+.modal-leave-to .modal-container {
+  transform: scale(0.95);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .modal-container {
+    width: 95%;
+    max-height: 85vh;
+  }
+  
+  .modal-header {
+    padding: 1rem 1.25rem;
+  }
+  
+  .header-left {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  
+  .modal-header h3 {
+    font-size: 1rem;
+  }
+  
+  .modal-body {
+    padding: 1rem;
+  }
+  
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .info-section {
+    padding: 1rem;
+  }
 }
 </style>

@@ -1,29 +1,27 @@
 <template>
   <div class="live-log-panel">
-    <!-- Header dengan Stats -->
+    <!-- Header -->
     <div class="panel-header">
-      <h3>📝 Recent Logs</h3>
+      <h3>Recent Logs</h3>
       <button 
         @click="fetchLogs" 
         class="refresh-btn"
         :class="{ spinning: isRefreshing }"
         title="Refresh"
       >
-        🔄
+        ↻
       </button>
     </div>
 
     <!-- Stats Bar -->
     <div class="stats-bar">
       <div class="stat success">
-        <span class="stat-icon">✅</span>
         <div class="stat-info">
           <span class="stat-value">{{ successCount }}</span>
           <span class="stat-label">Success</span>
         </div>
       </div>
       <div class="stat failed">
-        <span class="stat-icon">❌</span>
         <div class="stat-info">
           <span class="stat-value">{{ failedCount }}</span>
           <span class="stat-label">Failed</span>
@@ -32,21 +30,20 @@
     </div>
 
     <!-- Loading -->
-    <div v-if="isLoading" class="loading">
-      <div class="spinner"></div>
-      <p>Loading...</p>
+    <div v-if="isLoading" class="status-message">
+      <span class="loading-dot"></span>
+      <span>Loading...</span>
     </div>
 
     <!-- Error -->
-    <div v-else-if="error" class="error">
-      <p>{{ error }}</p>
+    <div v-else-if="error" class="status-message error">
+      <span>{{ error }}</span>
       <button @click="fetchLogs" class="retry-btn">Retry</button>
     </div>
 
     <!-- Logs List -->
     <div v-else class="logs-list">
-      <div v-if="logs.length === 0" class="empty">
-        <span>📋</span>
+      <div v-if="logs.length === 0" class="empty-state">
         <p>No logs yet</p>
       </div>
 
@@ -56,16 +53,15 @@
         class="log-item"
         :class="getStatusClass(log.Status)"
       >
-        <!-- Status Icon -->
-        <div class="log-status">
-          {{ getStatusIcon(log.Status) }}
-        </div>
+        <!-- Status Indicator -->
+        <div class="log-status"></div>
 
         <!-- Log Info -->
         <div class="log-info">
           <div class="log-name">{{ getJobName(log) }}</div>
           <div class="log-meta">
             <span class="duration">{{ formatDuration(log.DurationSec) }}</span>
+            <span class="separator">•</span>
             <span class="time">{{ formatTime(log.Timestamp) }}</span>
           </div>
         </div>
@@ -76,7 +72,7 @@
           class="detail-btn"
           title="View detail"
         >
-          ...
+          →
         </button>
       </div>
     </div>
@@ -127,7 +123,7 @@ async function fetchLogs() {
   try {
     const data = await monitoringService.getLogs();
     
-    // Take latest 10 logs
+    // Take latest 20 logs
     logs.value = (Array.isArray(data) ? data : [])
       .sort((a, b) => new Date(b.Timestamp) - new Date(a.Timestamp))
       .slice(0, 20);
@@ -185,14 +181,6 @@ function getStatusClass(status) {
   return 'pending';
 }
 
-function getStatusIcon(status) {
-  const s = status.toUpperCase();
-  if (['SUCCESS', 'COMPLETED'].includes(s)) return '✅';
-  if (s.includes('FAIL') || s === 'ERROR') return '❌';
-  if (s === 'RUNNING') return '⏳';
-  return '⏱️';
-}
-
 function formatDuration(seconds) {
   if (!seconds) return '-';
   if (seconds < 60) return `${seconds}s`;
@@ -238,8 +226,8 @@ onUnmounted(() => {
 <style scoped>
 .live-log-panel {
   background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -248,37 +236,40 @@ onUnmounted(() => {
 
 /* Header */
 .panel-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: #fafafa;
   padding: 1rem 1.25rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  border-bottom: 1px solid #e5e5e5;
 }
 
 .panel-header h3 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.9375rem;
   font-weight: 600;
+  color: #1a1a1a;
 }
 
 .refresh-btn {
- background: rgba(255, 255, 255, 0.2);
- border: none;
- color: white;
- width: 32px;
- height: 32px;
- border-radius: 6px;
- cursor: pointer;
- transition: all 0.2s;
- font-size: 2rem;
- display: flex;
- align-items: center;
- justify-content: center;
+  background: transparent;
+  border: 1px solid #e5e5e5;
+  color: #666;
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .refresh-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: #f5f5f5;
+  border-color: #1a1a1a;
+  color: #1a1a1a;
 }
 
 .refresh-btn.spinning {
@@ -296,31 +287,25 @@ onUnmounted(() => {
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
   padding: 1rem 1.25rem;
-  background: #f8f9fa;
-  border-bottom: 1px solid #e9ecef;
+  background: #fafafa;
+  border-bottom: 1px solid #e5e5e5;
 }
 
 .stat {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
   padding: 0.75rem;
   background: white;
-  border-radius: 8px;
+  border-radius: 6px;
   border-left: 3px solid;
 }
 
 .stat.success {
-  border-left-color: #28a745;
+  border-left-color: #22c55e;
 }
 
 .stat.failed {
-  border-left-color: #dc3545;
-}
-
-.stat-icon {
-  font-size: 1.5rem;
-  line-height: 1;
+  border-left-color: #ef4444;
 }
 
 .stat-info {
@@ -330,64 +315,74 @@ onUnmounted(() => {
 
 .stat-value {
   font-size: 1.5rem;
-  font-weight: 700;
-  color: #2c3e50;
+  font-weight: 600;
+  color: #1a1a1a;
   line-height: 1;
 }
 
 .stat-label {
   font-size: 0.75rem;
-  color: #6c757d;
+  color: #666;
   font-weight: 500;
+  margin-top: 0.25rem;
 }
 
-/* Loading, Error, Empty */
-.loading,
-.error,
-.empty {
+/* Status Message */
+.status-message {
+  padding: 1.5rem 1.25rem;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 2rem 1rem;
   gap: 0.75rem;
+  font-size: 0.875rem;
+  color: #666;
 }
 
-.spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid #f0f0f0;
-  border-top: 3px solid #667eea;
+.status-message.error {
+  background: #fef2f2;
+  color: #dc2626;
+  justify-content: space-between;
+}
+
+.loading-dot {
+  width: 8px;
+  height: 8px;
+  background: #666;
   border-radius: 50%;
-  animation: spin 1s linear infinite;
+  animation: pulse 1.5s ease-in-out infinite;
 }
 
-.loading p,
-.error p,
-.empty p {
-  margin: 0;
-  color: #6c757d;
-  font-size: 0.9rem;
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }
 
 .retry-btn {
-  background: #dc3545;
-  color: white;
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
+  background: transparent;
+  border: 1px solid #dc2626;
+  color: #dc2626;
+  padding: 0.375rem 0.75rem;
+  border-radius: 4px;
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: 0.8125rem;
   transition: all 0.2s;
 }
 
 .retry-btn:hover {
-  background: #c82333;
+  background: #dc2626;
+  color: white;
 }
 
-.empty span {
-  font-size: 2.5rem;
-  opacity: 0.3;
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 2rem 1rem;
+}
+
+.empty-state p {
+  margin: 0;
+  color: #999;
+  font-size: 0.875rem;
 }
 
 /* Logs List */
@@ -402,16 +397,16 @@ onUnmounted(() => {
 }
 
 .logs-list::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: #f8f8f8;
 }
 
 .logs-list::-webkit-scrollbar-thumb {
-  background: #cbd5e0;
+  background: #d4d4d4;
   border-radius: 3px;
 }
 
 .logs-list::-webkit-scrollbar-thumb:hover {
-  background: #a0aec0;
+  background: #a3a3a3;
 }
 
 /* Log Item */
@@ -420,16 +415,15 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.75rem;
   padding: 0.75rem;
-  background: #f8f9fa;
-  border-radius: 8px;
+  background: #fafafa;
+  border-radius: 6px;
   margin-bottom: 0.5rem;
-  border-left: 3px solid #cbd5e0;
+  border-left: 3px solid #d4d4d4;
   transition: all 0.2s;
 }
 
 .log-item:hover {
-  background: #e9ecef;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  background: #f5f5f5;
 }
 
 .log-item:last-child {
@@ -437,26 +431,44 @@ onUnmounted(() => {
 }
 
 .log-item.success {
-  border-left-color: #28a745;
+  border-left-color: #22c55e;
 }
 
 .log-item.failed {
-  border-left-color: #dc3545;
+  border-left-color: #ef4444;
 }
 
 .log-item.running {
-  border-left-color: #ffc107;
+  border-left-color: #f59e0b;
 }
 
 .log-item.pending {
-  border-left-color: #6c757d;
+  border-left-color: #6b7280;
 }
 
-/* Log Status Icon */
+/* Log Status Indicator */
 .log-status {
-  font-size: 1.25rem;
-  line-height: 1;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
   flex-shrink: 0;
+}
+
+.log-item.success .log-status {
+  background: #22c55e;
+}
+
+.log-item.failed .log-status {
+  background: #ef4444;
+}
+
+.log-item.running .log-status {
+  background: #f59e0b;
+}
+
+.log-item.pending .log-status {
+  background: #6b7280;
 }
 
 /* Log Info */
@@ -466,9 +478,9 @@ onUnmounted(() => {
 }
 
 .log-name {
-  font-weight: 600;
-  font-size: 0.85rem;
-  color: #2c3e50;
+  font-weight: 500;
+  font-size: 0.875rem;
+  color: #1a1a1a;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -477,40 +489,37 @@ onUnmounted(() => {
 
 .log-meta {
   display: flex;
-  gap: 0.75rem;
-  font-size: 0.75rem;
-  color: #6c757d;
-}
-
-.duration,
-.time {
-  display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: #666;
 }
 
-/* Detail Button */
+.separator {
+  color: #d4d4d4;
+}
+
 /* Detail Button */
 .detail-btn {
-background: transparent; 
-border: none;
-color: #6c757d; 
-width: 32px;
-height: 32px;
-border-radius: 6px;
-cursor: pointer;
-font-size: 2rem;
-transition: all 0.2s;
-flex-shrink: 0;
-display: flex;
-align-items: center;
-justify-content: center;
-padding: 0;
+  background: transparent;
+  border: 1px solid #e5e5e5;
+  color: #666;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
 }
 
 .detail-btn:hover {
-/* background: #5568d3; <--- HAPUS/UBAH ini */
-background: #dcdfe3; /* Ganti dengan warna latar belakang hover yang lembut */
-transform: scale(1.0); /* Scale(1.1) terlalu agresif, ganti atau hapus */
+  background: #f5f5f5;
+  border-color: #1a1a1a;
+  color: #1a1a1a;
 }
 </style>
