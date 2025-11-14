@@ -1,15 +1,13 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import { useAuthStore } from '@/stores/authStore.js';
+import { useAuthStore } from '@/stores/authStore.js'; // Store Otentikasi
+import { useAppStore } from '@/stores/app.js' // ⭐ KOREKSI: Pastikan ini adalah path file Store Setup Anda
 
 // ============================================
-// IMPORT LAYOUT
+// IMPORT LAYOUT & PAGES
 // ============================================
 import AppLayout from '@/views/AppLayout.vue';
-
-// ============================================
-// IMPORT PAGES
-// ============================================
 import Login from '@/views/Login.vue';
+import SetupWizard from '@/views/SetupWizard.vue'; // ⭐ BARU: Import Halaman Setup
 import Dashboard from '@/views/Dashboard.vue';
 import Logs from '@/views/Logs.vue';
 import ManualJobs from '@/views/ManualJobs.vue';
@@ -32,13 +30,24 @@ const routes = [
             title: 'Login - G-Backup'
         }
     },
+    // ⭐ BARU: SETUP WIZARD ROUTE
+    {
+        path: '/setup-wizard',
+        name: 'SetupWizard',
+        component: SetupWizard,
+        meta: {
+            requiresAuth: false,
+            isSetupRoute: true, // Tag untuk membedakan rute Setup
+            title: 'Setup Awal - G-Backup'
+        }
+    },
     
     // ----------------------------------------
     // PROTECTED ROUTES (With Authentication)
     // ----------------------------------------
     {
         path: '/',
-        component: AppLayout,  // ⭐ LAYOUT WRAPPER
+        component: AppLayout,  // LAYOUT WRAPPER
         meta: { requiresAuth: true },
         children: [
             // Default redirect
@@ -110,7 +119,7 @@ const routes = [
     {
         path: '/:pathMatch(.*)*',
         name: 'NotFound',
-        redirect: { name: 'Login' }
+        redirect: { name: 'SetupWizard' } // Default redirect ke login jika 404
     }
 ];
 
@@ -120,7 +129,6 @@ const routes = [
 const router = createRouter({
     history: createWebHistory(import.meta.env.BASE_URL),
     routes,
-    // Scroll behavior
     scrollBehavior(to, from, savedPosition) {
         if (savedPosition) {
             return savedPosition;
@@ -133,25 +141,49 @@ const router = createRouter({
 // ============================================
 // NAVIGATION GUARDS
 // ============================================
-router.beforeEach((to, from, next) => {
-    // Debug logs (bisa dihapus di production)
-    console.log('🔍 Navigation:', {
-        from: from.path,
-        to: to.path,
-        requiresAuth: to.meta.requiresAuth
-    });
+router.beforeEach(async (to, from, next) => {
     
     const authStore = useAuthStore();
-    const isAuthenticated = authStore.isAuthenticated();
+    const appStore = useAppStore(); // Ambil App Store
     
-    console.log('🔐 Auth Status:', isAuthenticated);
+    // 1. MEMASTIKAN STATUS SETUP TELAH DIMUAT
+    if (appStore.setupStatus === 'LOADING') {
+        // Tunggu hingga status dimuat dari API
+        await appStore.checkSetupStatus(); 
+    }
+
+    const appStatus = appStore.setupStatus;
+    const isAuthenticated = authStore.isAuthenticated();
     
     // Set document title
     if (to.meta.title) {
         document.title = to.meta.title;
     }
     
-    // Check authentication
+    // 2. LOGIKA SETUP WIZARD
+    if (appStatus === 'SETUP_NEEDED') {
+        // Jika Setup Dibutuhkan, paksa semua rute ke SetupWizard
+        if (to.name === 'SetupWizard') {
+            next(); // Boleh ke Setup Wizard
+        } else {
+            console.log('❌ Setup Needed, redirect to Setup Wizard');
+            next({ name: 'SetupWizard' }); 
+        }
+        return;
+    }
+    
+    if (appStatus === 'SETUP_COMPLETE') {
+        // Jika Setup Selesai, blokir akses ke rute Setup Wizard
+        if (to.meta.isSetupRoute) {
+            console.log('❌ Setup Complete, redirect from Setup Wizard');
+            // Redirect ke Dashboard jika sudah login, atau Login jika belum
+            return next(isAuthenticated ? { name: 'Dashboard' } : { name: 'Login' });
+        }
+    }
+
+    // 3. LOGIKA OTENTIKASI (Hanya berjalan jika Setup Selesai)
+    
+    // Check authentication for protected routes
     if (to.meta.requiresAuth && !isAuthenticated) {
         console.log('❌ Not authenticated, redirect to login');
         next({ name: 'Login', query: { redirect: to.fullPath } });
@@ -171,7 +203,7 @@ router.beforeEach((to, from, next) => {
 
 // Optional: After navigation
 router.afterEach((to, from) => {
-    console.log('✅ Navigated to:', to.path);
+    // console.log('✅ Navigated to:', to.path); 
 });
 
 export default router;

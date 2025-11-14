@@ -11,6 +11,7 @@ import (
 type UserRepository interface {
 	CreateUser(user *models.User) error
 	FindByUsername(username string) (*models.User, error)
+	CountUsers() (int64, error)
 }
 
 // userRepositoryImpl adalah implementasi (BAGAIMANA dilakukan)
@@ -52,4 +53,17 @@ func (r *userRepositoryImpl) FindByUsername(username string) (*models.User, erro
 	}
 
 	return &user, nil
+}
+
+func (r *userRepositoryImpl) CountUsers() (int64, error) {
+	var count int64
+
+	// GORM akan menghitung semua record di tabel yang sesuai dengan model User
+	result := r.DB.Model(&models.User{}).Count(&count)
+
+	if result.Error != nil {
+		return 0, result.Error
+	}
+
+	return count, nil
 }

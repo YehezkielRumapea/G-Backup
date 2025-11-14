@@ -10,7 +10,7 @@ export const useAuthStore = defineStore('auth', () => {
 
     function setToken(newToken) {
         token.value = newToken
-        sessionStorage.setItem('token', newToken) 
+        sessionStorage.setItem('token', newToken)
     }
 
     function clearToken() {

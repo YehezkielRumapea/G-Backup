@@ -90,14 +90,15 @@ func main() {
 	backupHandler := handler.NewBackupHandler(backupSvc)
 	restoreHandler := handler.NewRestoreHandler(backupSvc)
 	browserHandler := handler.NewBrowserHandler(browserSvc)
+	setupHandler := handler.NewSetupHandler(authSvc)
 	// remoteHandler := handler.NewRemoteHandler(remoteSvc)
 
 	// --- 4. SEEDING ADMIN AWAL ---
-	if err := authSvc.RegisterAdmin(DefaultAdminUsername, DefaultAdminPassword); err != nil {
-		fmt.Printf("Admin Seeding Status: %v\n", err)
-	} else {
-		fmt.Println("✅ Admin user berhasil dibuat.")
-	}
+	// if err := authSvc.RegisterAdmin(DefaultAdminUsername, DefaultAdminPassword); err != nil {
+	// fmt.Printf("Admin Seeding Status: %v\n", err)
+	// } else {
+	// fmt.Println("✅ Admin user berhasil dibuat.")
+	// }
 
 	// --- 5. SETUP WEB SERVER ECHO ---
 	e := echo.New()
@@ -113,14 +114,35 @@ func main() {
 		return c.String(http.StatusOK, "G-Backup New Architecture is Running!")
 	})
 
+	// ===========================================
+	// RUTE PUBLIK UTAMA (TIDAK DILINDUNGI JWT)
+	// ===========================================
+
 	// Rute Publik (Login)
 	e.POST("/api/v1/auth/login", authHandler.Login)
+
+	// ⭐ KOREKSI DI SINI: GUNAKAN PATH LENGKAP /api/v1/setup AGAR TIDAK TERKENA JWT MIDDLEWARE
+	setupGroup := e.Group("/api/v1/setup")
+	setupGroup.GET("/status", setupHandler.GetSetupStatus)          // Cek apakah admin sudah ada
+	setupGroup.POST("/register", setupHandler.RegisterInitialAdmin) // Registrasi admin pertama
+
+	// ===========================================
+	// RUTE PRIVAT (DILINDUNGI JWT)
+	// ===========================================
 
 	// Rute Privat (Dilindungi JWT)
 	r := e.Group("/api/v1")
 	r.Use(echojwt.WithConfig(echojwt.Config{
 		SigningKey: []byte(jwtSecretKey),
 	})) // Menerapkan Middleware JWT
+
+	// Authentication Endpoints (Catatan: Ini sudah di bawah JWT, hanya bisa diakses setelah login)
+	// Jika Anda ingin user bisa menggunakan setupHandler.Login (yang biasanya dipakai untuk register)
+	// pada rute ini setelah setup selesai, pastikan Anda menggunakan authHandler.Login di sini,
+	// atau pindahkan semua rute Auth ke public/r.
+	// Saat ini authHandler.Login sudah ada di atas (publik), jadi rute ini di bawah JWT tidak efisien.
+	// authGroup := r.Group("/auth")
+	// authGroup.POST("/login", setupHandler.Login) // Hapus atau ganti dengan r.POST("/auth/login", authHandler.Login) jika perlu
 
 	// Rute Monitoring dan Logs
 	r.GET("/monitoring/remotes", monitorHandler.GetRemoteStatusList)
