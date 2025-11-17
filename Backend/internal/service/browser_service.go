@@ -50,8 +50,7 @@ func (s *browserServiceImpl) ListFiles(remoteName string, path string) ([]Rclone
 	result := ExecuteCliJob(args)
 	if !result.Success {
 		// Gabungkan stderr/stdout dari Rclone untuk debugging yang lebih baik
-		detailedError := fmt.Sprintf("Rclone failed for path '%s'. Detail: %s", fullPath, result.ErrorMsg)
-		return nil, fmt.Errorf(detailedError)
+		return nil, fmt.Errorf("Rclone failed for path '%s'. Detail: %s", fullPath, result.ErrorMsg)
 	}
 
 	// 3. Parse JSON
