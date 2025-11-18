@@ -19,6 +19,7 @@ type JobRepository interface {
 	UpdateJobActivity(JobID uint, isActive bool) error
 	CountJobOnRemote(remoteName string) (int64, error)
 	DeleteJob(JobID uint) error
+	UpdateJob(jobID uint, updates map[string]interface{}) error
 }
 
 type jobRepositoryImpl struct {
@@ -111,5 +112,33 @@ func (r *jobRepositoryImpl) DeleteJob(JobID uint) error {
 	if result != nil {
 		return result.Error
 	}
+	return nil
+}
+
+// repository/job_repository_impl.go
+
+func (r *jobRepositoryImpl) UpdateJob(jobID uint, updates map[string]interface{}) error {
+	// ✅ Validate job exists
+	var job models.ScheduledJob
+	if err := r.DB.First(&job, jobID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("job ID %d tidak ditemukan", jobID)
+		}
+		return err
+	}
+
+	// ✅ Update dengan map
+	result := r.DB.Model(&models.ScheduledJob{}).
+		Where("id = ?", jobID).
+		Updates(updates)
+
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("tidak ada perubahan pada job ID %d", jobID)
+	}
+
 	return nil
 }

@@ -19,6 +19,7 @@ type BackupService interface {
 	CreateJobAndDispatch(job *models.ScheduledJob) error
 	TriggerManualJob(jobID uint) error
 	DeleteJob(JobId uint) error
+	UpdateJob(jobID uint, updatedJob *models.ScheduledJob) error
 }
 
 type backupServiceImpl struct {
@@ -336,6 +337,65 @@ func (s *backupServiceImpl) DeleteJob(JobID uint) error {
 	if err := s.JobRepo.DeleteJob(JobID); err != nil {
 		return fmt.Errorf("gagal menghapus job ID %d: %w", JobID, err)
 	}
+	return nil
+}
+
+func (s *backupServiceImpl) UpdateJob(jobID uint, updatedJob *models.ScheduledJob) error {
+	fmt.Printf("[UPDATE] Memperbarui Job ID: %d\n", jobID)
+
+	// 1. Cek apakah job exist
+	existingJob, err := s.JobRepo.FindJobByID(jobID)
+	if err != nil {
+		return fmt.Errorf("job tidak ditemukan: %w", err)
+	}
+
+	// 2. ✅ Build update map (hanya field yang ada)
+	updates := make(map[string]interface{})
+
+	if updatedJob.JobName != "" {
+		updates["job_name"] = updatedJob.JobName
+	}
+	if updatedJob.OperationMode != "" {
+		updates["operation_mode"] = updatedJob.OperationMode
+	}
+	if updatedJob.RcloneMode != "" {
+		updates["rclone_mode"] = updatedJob.RcloneMode
+	}
+	if updatedJob.SourcePath != "" {
+		updates["source_path"] = updatedJob.SourcePath
+	}
+	if updatedJob.DestinationPath != "" {
+		updates["destination_path"] = updatedJob.DestinationPath
+	}
+	if updatedJob.RemoteName != "" {
+		updates["remote_name"] = updatedJob.RemoteName
+	}
+
+	// ✅ Allow empty string untuk script (untuk clear script)
+	updates["pre_script"] = updatedJob.PreScript
+	updates["post_script"] = updatedJob.PostScript
+
+	// ✅ Schedule cron bisa kosong (untuk ubah jadi manual job)
+	updates["schedule_cron"] = updatedJob.ScheduleCron
+
+	// ✅ IsActive harus explicit check
+	if updatedJob.IsActive != existingJob.IsActive {
+		updates["is_active"] = updatedJob.IsActive
+	}
+
+	updates["updated_at"] = time.Now()
+
+	// 3. ✅ Validate minimal 1 field (exclude updated_at)
+	if len(updates) <= 1 {
+		return fmt.Errorf("tidak ada field yang diubah")
+	}
+
+	// 4. Update ke database
+	if err := s.JobRepo.UpdateJob(jobID, updates); err != nil {
+		return fmt.Errorf("gagal update job: %w", err)
+	}
+
+	fmt.Printf("[UPDATE] Job %d berhasil diperbarui (%d fields)\n", jobID, len(updates)-1)
 	return nil
 }
 

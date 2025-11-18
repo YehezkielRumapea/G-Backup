@@ -8,13 +8,11 @@ export default {
    */
   async createBackupJob(backupConfig) {
     try {
-      // Panggil endpoint /jobs/new
       const response = await apiClient.post('/jobs/new', backupConfig)
-      // Mengembalikan pesan sukses (misalnya, "Job diterima")
       return response.data
     } catch (error) {
       console.error("Error creating backup job:", error)
-      throw error // Lempar error ke komponen Vue untuk ditampilkan
+      throw error
     }
   },
 
@@ -25,7 +23,6 @@ export default {
    */
   async createRestoreJob(restoreConfig) {
     try {
-      // Panggil endpoint /jobs/restore
       const response = await apiClient.post('/jobs/restore', restoreConfig)
       return response.data
     } catch (error) {
@@ -41,7 +38,6 @@ export default {
    */
   async triggerManualJob(jobId) {
     try {
-      // Panggil endpoint /jobs/trigger/[id]
       const response = await apiClient.post(`/jobs/trigger/${jobId}`)
       return response.data
     } catch (error) {
@@ -56,16 +52,15 @@ export default {
    * @param {number} jobId - ID dari Job.
    * @returns {Promise<object>} Object berisi "script_preview".
    */
-
-  async getManualJobs() { // ✅ BENAR: Shorthand untuk method dalam object
-  try {
-   const response = await apiClient.get('/jobs/manual');
-   return response.data;
-  } catch (error) {
-        console.error("Error fetching manual jobs:", error);
-        throw error;
+  async getManualJobs() {
+    try {
+      const response = await apiClient.get('/jobs/manual');
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching manual jobs:", error);
+      throw error;
     }
- },
+  },
 
   async getJobScript(jobId) {
     try {
@@ -99,14 +94,52 @@ export default {
     }
   },
 
+  /**
+   * Delete job by ID
+   * Endpoint: DELETE /api/v1/jobs/delete/:id
+   * @param {number} jobId - ID dari Job yang akan dihapus
+   */
   async deleteJob(jobId) {
     try {
-        // Panggil endpoint DELETE /api/v1/jobs/[id]
-        const response = await apiClient.delete(`/jobs/delete/${jobId}`);
-        return response.data;
+      const response = await apiClient.delete(`/jobs/delete/${jobId}`);
+      return response.data;
     } catch (error) {
-        console.error(`Error deleting job ${jobId}:`, error);
-        throw error;
+      console.error(`Error deleting job ${jobId}:`, error);
+      throw error;
     }
-},
+  },
+
+  /**
+   * ✅ Get single job by ID (untuk edit)
+   * Endpoint: GET /api/v1/jobs/:id
+   * @param {number} jobId - ID dari Job
+   * @returns {Promise<object>} Job data
+   */
+  async getJobById(jobId) {
+    try {
+      const response = await apiClient.get(`/jobs/${jobId}`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching job ${jobId}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * ✅ Update job by ID (partial update)
+   * Endpoint: PUT /api/v1/jobs/:id
+   * @param {number} jobId - ID dari Job
+   * @param {object} updates - Object berisi field yang akan diupdate
+   * @returns {Promise<object>} Success message
+   */
+  async updateJob(jobId, updates) {
+    try {
+      // ✅ Fix: Kirim updates sebagai body, bukan query
+      const response = await apiClient.put(`/jobs/update/${jobId}`, updates);
+      return response.data;
+    } catch (error) {
+      console.error(`Error updating job ${jobId}:`, error);
+      throw error;
+    } 
+  },
 }

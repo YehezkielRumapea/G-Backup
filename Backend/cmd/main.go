@@ -86,7 +86,7 @@ func main() {
 	// 3.3. Inisialisasi Handler (Controller Layer)
 	authHandler := handler.NewAuthHandler(authSvc)
 	monitorHandler := handler.NewMonitoringHandler(monitorSvc, schedulerSvc, logRepo)
-	jobHandler := handler.NewJobHandler(schedulerSvc, backupSvc) // Membutuhkan BackupSvc untuk TriggerManual
+	jobHandler := handler.NewJobHandler(schedulerSvc, backupSvc, jobRepo) // Membutuhkan BackupSvc untuk TriggerManual
 	backupHandler := handler.NewBackupHandler(backupSvc)
 	restoreHandler := handler.NewRestoreHandler(backupSvc)
 	browserHandler := handler.NewBrowserHandler(browserSvc)
@@ -155,6 +155,8 @@ func main() {
 	r.POST("/jobs/trigger/:id", jobHandler.TriggerManualJob) // Tombol "Run Now"
 	r.GET("/jobs/manual", jobHandler.GetManualJob)
 	r.DELETE("/jobs/delete/:id", jobHandler.DeleteJob)
+	r.PUT("/jobs/update/:id", jobHandler.UpdateJob)
+	r.GET("/jobs/:id", jobHandler.GetJobByID)
 
 	// Rute Aksi
 	r.POST("/jobs/new", backupHandler.CreateNewJob)        // Create Backup (Manual/Auto)
