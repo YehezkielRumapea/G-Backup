@@ -21,7 +21,7 @@
           </router-link>
           
           <router-link to="/manual" class="nav-item">
-            <span class="nav-text">Manual Jobs</span>
+            <span class="nav-text">Jobs</span>
           </router-link>
         </nav>
       </div>

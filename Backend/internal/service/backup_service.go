@@ -20,6 +20,7 @@ type BackupService interface {
 	TriggerManualJob(jobID uint) error
 	DeleteJob(JobId uint) error
 	UpdateJob(jobID uint, updatedJob *models.ScheduledJob) error
+	GetJobByID(jobID uint) (*models.ScheduledJob, error)
 }
 
 type backupServiceImpl struct {
@@ -340,6 +341,13 @@ func (s *backupServiceImpl) DeleteJob(JobID uint) error {
 	return nil
 }
 
+func (s *backupServiceImpl) GetJobByID(jobID uint) (*models.ScheduledJob, error) {
+	job, err := s.JobRepo.FindJobByID(jobID)
+	if err != nil {
+		return nil, err
+	}
+	return job, nil
+}
 func (s *backupServiceImpl) UpdateJob(jobID uint, updatedJob *models.ScheduledJob) error {
 	fmt.Printf("[UPDATE] Memperbarui Job ID: %d\n", jobID)
 

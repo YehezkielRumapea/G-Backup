@@ -2,12 +2,11 @@ package handler
 
 import (
 	"fmt"
-	"net/http"
-	"strconv" // Diperlukan untuk parsing ID dari URL
-
 	"gbackup-new/backend/internal/models"
 	"gbackup-new/backend/internal/repository"
 	"gbackup-new/backend/internal/service" // Sesuaikan path module
+	"net/http"
+	"strconv" // Diperlukan untuk parsing ID dari URL
 
 	"github.com/labstack/echo/v4"
 )
@@ -33,25 +32,21 @@ func NewJobHandler(schedulerSvc service.SchedulerService, backupSvc service.Back
 // ----------------------------------------------------
 
 func (h *JobHandler) GetJobByID(c echo.Context) error {
-	// 1. Parse ID
-	jobID := c.Param("id")
-	id64, err := strconv.ParseUint(jobID, 10, 32)
+	jobIDStr := c.Param("id")
+	jobID, err := strconv.ParseUint(jobIDStr, 10, 64)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid job ID",
+			"error": "Invalid job ID format",
 		})
 	}
-	id := uint(id64)
 
-	// 2. Get job from repository
-	job, err := h.JobRepo.FindJobByID(id)
+	job, err := h.JobRepo.FindJobByID((uint(jobID)))
 	if err != nil {
 		return c.JSON(http.StatusNotFound, map[string]string{
-			"error": "Job not found",
+			"error": err.Error(),
 		})
 	}
 
-	// 3. Return job data
 	return c.JSON(http.StatusOK, job)
 }
 
