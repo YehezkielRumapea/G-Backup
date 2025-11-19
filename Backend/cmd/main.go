@@ -73,6 +73,7 @@ func main() {
 	jobRepo := repository.NewJobRepository(dbInstance)
 	logRepo := repository.NewLogRepository(dbInstance)
 	monitorRepo := repository.NewMonitoringRepository(dbInstance)
+	browserRepo := repository.NewBrowserRepository()
 	// remoteRepo := repository.NewRemoteRepository(dbInstance) // Untuk "Add Remote"
 
 	// 3.2. Inisialisasi Service (Lapisan Logika Bisnis)
@@ -80,7 +81,7 @@ func main() {
 	monitorSvc := service.NewMonitoringService(monitorRepo, logRepo, jobRepo)
 	backupSvc := service.NewBackupService(jobRepo, logRepo, monitorRepo, monitorSvc) // Orkestrator 3 Fase
 	schedulerSvc := service.NewSchedulerService(jobRepo, backupSvc)
-	browserSvc := service.NewBrowserService()
+	browserSvc := service.NewBrowserService(browserRepo)
 	// remoteSvc := service.NewRemoteService(remoteRepo) // Service "Add Remote"
 
 	// 3.3. Inisialisasi Handler (Controller Layer)
@@ -137,7 +138,7 @@ func main() {
 	})) // Menerapkan Middleware JWT
 
 	// Authentication Endpoints (Catatan: Ini sudah di bawah JWT, hanya bisa diakses setelah login)
-	// Jika Anda ingin user bisa menggunakan setupHandler.Login (yang biasanya dipakai untuk register)
+	// Jika Anda ingin user bisa menggunakan setupHandler.Login (ya	ng biasanya dipakai untuk register)
 	// pada rute ini setelah setup selesai, pastikan Anda menggunakan authHandler.Login di sini,
 	// atau pindahkan semua rute Auth ke public/r.
 	// Saat ini authHandler.Login sudah ada di atas (publik), jadi rute ini di bawah JWT tidak efisien.
@@ -161,7 +162,9 @@ func main() {
 	// Rute Aksi
 	r.POST("/jobs/new", backupHandler.CreateNewJob)        // Create Backup (Manual/Auto)
 	r.POST("/jobs/restore", restoreHandler.TriggerRestore) // Create Restore
-	r.GET("/browser/list", browserHandler.ListFiles)
+	r.GET("/browser/files", browserHandler.ListFiles)
+	r.GET("/browser/remotes", browserHandler.GetAvailableRemotes)
+	r.GET("/browser/info", browserHandler.GetFileInfo)
 
 	// Rute Konfigurasi
 	// r.POST("/remotes/new", remoteHandler.AddNewRemote) // Add New Remote

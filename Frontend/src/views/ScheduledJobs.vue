@@ -14,6 +14,14 @@
       @close="closeModal"
     />
 
+    <!-- ✅ Edit Job Modal -->
+    <EditJobModal
+      :job-id="editingJobId"
+      :is-open="isEditModalOpen"
+      @close="closeEditModal"
+      @success="handleEditSuccess"
+    />
+
     <div v-if="isLoading" class="status-message">
       <span class="loading-dot"></span>
       Memuat data...
@@ -45,17 +53,40 @@
           </tr>
         </thead>
         <tbody>
-          <JobRow
+          <SchedJobRow
             v-for="job in jobs"
             :key="job.id"
             :job="job"
             @trigger="handleTrigger"
             @view-script="handleViewScript"
+            @edit="handleEdit"
             @delete="handleDeleteJob"
           />
         </tbody>
       </table>
     </div>
+
+    <!-- ✅ Toast Notification -->
+    <Transition name="toast">
+      <div
+        v-if="toast.show"
+        :class="getToastClass(toast.type)"
+        class="toast-notification"
+      >
+        <div class="toast-content">
+          <svg v-if="toast.type === 'success'" class="toast-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+          </svg>
+          <svg v-else-if="toast.type === 'error'" class="toast-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+          <svg v-else class="toast-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p class="toast-message">{{ toast.message }}</p>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -63,8 +94,9 @@
 import { ref, onMounted } from 'vue';
 import monitoringService from '@/services/monitoringService';
 import jobService from '@/services/jobService';
-import JobRow from '@/components/SchedJobRow.vue';
+import SchedJobRow from '@/components/SchedJobRow.vue';
 import ScriptPreview from '@/components/ScriptPreview.vue';
+import EditJobModal from '@/components/EditJobModal.vue';
 
 const jobs = ref([]);
 const isLoading = ref(true);
@@ -73,6 +105,17 @@ const errorMessage = ref(null);
 const isModalVisible = ref(false);
 const currentScript = ref('');
 const currentJobId = ref(null);
+
+// ✅ Edit modal state
+const editingJobId = ref(null);
+const isEditModalOpen = ref(false);
+
+// ✅ Toast notification state
+const toast = ref({
+  show: false,
+  message: '',
+  type: 'success', // 'success' | 'error' | 'info'
+});
 
 async function fetchData() {
   isLoading.value = true;
@@ -91,18 +134,39 @@ async function fetchData() {
 
 onMounted(fetchData);
 
+// ✅ Handle edit job - Open modal with job ID
+function handleEdit(jobId) {
+  console.log('✅ handleEdit dipanggil dengan jobId:', jobId);
+  editingJobId.value = jobId;
+  isEditModalOpen.value = true;
+}
+
+// ✅ Close edit modal
+function closeEditModal() {
+  console.log('✅ closeEditModal dipanggil');
+  isEditModalOpen.value = false;
+  editingJobId.value = null;
+}
+
+// ✅ Handle edit success - Reload jobs and show toast
+function handleEditSuccess() {
+  console.log('✅ handleEditSuccess dipanggil');
+  fetchData(); // Reload jobs list
+  showToast('Job berhasil diperbarui!', 'success');
+}
+
 async function handleTrigger(jobId) {
   if (!confirm(`Apakah Anda yakin ingin menjalankan job ID ${jobId} sekarang?`)) {
     return;
   }
   
   try {
-    await jobService.triggerJob(jobId);
-    alert(`Job ${jobId} berhasil di-trigger! Status akan diperbarui.`);
+    await jobService.triggerManualJob(jobId);
+    showToast(`Job ${jobId} berhasil di-trigger! Status akan diperbarui.`, 'success');
     fetchData();
   } catch (error) {
     const errorMsg = error.response?.data?.error || error.message || String(error);
-    alert(`Gagal men-trigger job: ${errorMsg}`);
+    showToast(`Gagal men-trigger job: ${errorMsg}`, 'error');
   }
 }
 
@@ -117,25 +181,47 @@ async function handleViewScript(jobId) {
   } catch (error) {
     isModalVisible.value = false;
     const errorMsg = error.response?.data?.error || error.message;
-    alert(`Gagal memuat script: ${errorMsg}`);
+    showToast(`Gagal memuat pratinjau script: ${errorMsg}`, 'error');
   }
 }
 
-async function handleDeleteJob(jobId) {
-    try {
-        await jobService.deleteJob(jobId); 
-        alert(`Job ID ${jobId} berhasil dihapus.`);
-        fetchData();
-    } catch (error) {
-        const errorMsg = error.response?.data?.error || "Gagal menghapus job.";
-        alert(`Gagal menghapus job: ${errorMsg}`);
-    }
+async function handleDeleteJob(jobId, jobName) {
+  if (!confirm(`Apakah Anda yakin ingin menghapus job "${jobName}"?`)) {
+    return;
+  }
+
+  try {
+    await jobService.deleteJob(jobId);
+    showToast('Job berhasil dihapus!', 'success');
+    fetchData();
+  } catch (error) {
+    const errorMsg = error.response?.data?.error || error.message || 'Gagal menghapus job';
+    showToast(errorMsg, 'error');
+  }
 }
 
 function closeModal() {
   isModalVisible.value = false;
   currentScript.value = '';
   currentJobId.value = null;
+}
+
+// ✅ Show toast notification
+function showToast(message, type = 'success') {
+  toast.value = { show: true, message, type };
+  setTimeout(() => {
+    toast.value.show = false;
+  }, 3000);
+}
+
+// ✅ Get toast CSS class
+function getToastClass(type) {
+  const classes = {
+    success: 'toast-success',
+    error: 'toast-error',
+    info: 'toast-info'
+  };
+  return classes[type] || 'toast-info';
 }
 </script>
 
@@ -303,6 +389,89 @@ h1 {
   background: #fafafa;
 }
 
+/* Toast Notification */
+.toast-notification {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  z-index: 1001;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(400px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.toast-notification.toast-success {
+  border-left: 4px solid #22c55e;
+}
+
+.toast-notification.toast-error {
+  border-left: 4px solid #ef4444;
+}
+
+.toast-notification.toast-info {
+  border-left: 4px solid #3b82f6;
+}
+
+.toast-content {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+}
+
+.toast-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.toast-notification.toast-success .toast-icon {
+  color: #22c55e;
+}
+
+.toast-notification.toast-error .toast-icon {
+  color: #ef4444;
+}
+
+.toast-notification.toast-info .toast-icon {
+  color: #3b82f6;
+}
+
+.toast-message {
+  margin: 0;
+  color: #1a1a1a;
+  font-weight: 500;
+  font-size: 0.9375rem;
+  white-space: nowrap;
+}
+
+.toast-enter-active,
+.toast-leave-active {
+  transition: all 0.3s ease;
+}
+
+.toast-enter-from {
+  transform: translateX(400px);
+  opacity: 0;
+}
+
+.toast-leave-to {
+  transform: translateX(400px);
+  opacity: 0;
+}
+
 @media (max-width: 768px) {
   .scheduled-jobs-view {
     padding: 1.5rem 1rem;
@@ -327,6 +496,12 @@ h1 {
   
   .jobs-table {
     min-width: 800px;
+  }
+
+  .toast-notification {
+    bottom: 1rem;
+    right: 1rem;
+    left: 1rem;
   }
 }
 </style>

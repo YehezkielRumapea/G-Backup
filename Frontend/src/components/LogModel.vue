@@ -39,6 +39,10 @@
                   <span class="value">{{ log.DurationSec }} seconds</span>
                 </div>
                 <div class="info-item">
+                  <span class="label">TransferredByte</span>
+                  <span class="value">{{ log.transferredByte }} Byte</span>
+                </div>
+                <div class="info-item">
                   <span class="label">Timestamp</span>
                   <span class="value">{{ formatFullTimestamp(log.Timestamp) }}</span>
                 </div>

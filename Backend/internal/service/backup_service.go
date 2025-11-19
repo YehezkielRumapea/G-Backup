@@ -300,11 +300,12 @@ func (s *backupServiceImpl) handleJobCompletion(job models.ScheduledJob, result 
 
 	// 1. Catat ke tabel Logs
 	newLog := &models.Log{
-		JobID:       &job.ID,
-		Status:      status,
-		Message:     result.Output + result.ErrorMsg,
-		DurationSec: int(result.Duration.Seconds()),
-		Timestamp:   time.Now(),
+		JobID:            &job.ID,
+		Status:           status,
+		Message:          result.Output + result.ErrorMsg,
+		DurationSec:      int(result.Duration.Seconds()),
+		TransferredBytes: result.TransferredBytes,
+		Timestamp:        time.Now(),
 	}
 	s.LogRepo.CreateLog(newLog)
 

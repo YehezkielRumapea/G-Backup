@@ -1,6 +1,5 @@
 <template>
     <tr>
-        <td><strong>{{ job.id }}</strong></td> 
         <td><strong>{{ job.job_name }}</strong></td>
         
         <td>{{ job.type }}</td> 
@@ -17,41 +16,42 @@
         
         <td class="job-actions-col"> 
           <div class="actions">
-            <!-- ✅ Edit Button -->
+            <!-- Edit -->
             <button 
               @click="$emit('edit', job.id)" 
-              class="action-btn edit" 
+              class="icon-btn edit" 
               title="Edit Job"
             >
               ✏️
             </button>
 
-            <!-- Run Button -->
+            <!-- Run -->
             <button 
               @click="$emit('trigger', job.id)" 
-              class="action-btn play" 
-              title="Run Now"
+              class="icon-btn run" 
+              title="Run Job"
             >
               ▶
             </button>
 
-            <!-- View Script Button -->
+            <!-- View Script -->
             <button 
               @click="$emit('view-script', job.id)" 
-              class="action-btn view" 
+              class="icon-btn view" 
               title="View Script"
             >
-              👁
+              (i)
             </button>
 
-            <!-- Delete Button -->
+            <!-- Delete -->
             <button 
               @click="handleDelete" 
-              class="action-btn delete" 
+              class="icon-btn delete" 
               title="Delete Job"
             >
               🗑
             </button>
+
           </div>
         </td>
     </tr>
@@ -96,11 +96,16 @@ function getStatusClass(status) {
 
 <style scoped>
 /* Row hover effect */
+/* =============================== */
+/* == TABLE ROW HOVER EFFECT ==== */
+/* =============================== */
 tr:hover {
   background-color: #f8f9fa;
 }
 
-/* Styling status bar */
+/* =============================== */
+/* == STATUS BADGES ============= */
+/* =============================== */
 .status {
   padding: 4px 10px;
   border-radius: 12px;
@@ -121,121 +126,121 @@ tr:hover {
   animation: pulse-blue 2s ease-in-out infinite;
 }
 
-.status.completed, 
+.status.completed,
 .status.success { 
   background-color: #10b981; 
 }
 
-.status.failed, 
-.status.fail, 
-.status.fail_pre_script, 
-.status.fail_rclone, 
+.status.failed,
+.status.fail,
+.status.fail_pre_script,
+.status.fail_rclone,
 .status.fail_post_script { 
   background-color: #ef4444; 
 }
 
-/* Pulse animation for running status */
 @keyframes pulse-blue {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.7; }
 }
 
-/* Styling kolom aksi */
+/* =============================== */
+/* == ACTIONS COLUMN ============ */
+/* =============================== */
 .job-actions-col {
-  width: 180px; /* ✅ Tambah lebar untuk 4 tombol */
+  width: 160px;
 }
 
 .actions {
   display: flex;
-  gap: 6px;
+  gap: 10px;
   justify-content: center;
   align-items: center;
 }
 
-.action-btn {
+/* =============================== */
+/* == ICON-ONLY BUTTON STYLE ==== */
+/* =============================== */
+.icon-btn {
+  background: none;
   border: none;
-  background: rgba(255, 255, 255, 0.9);
   cursor: pointer;
-  font-size: 1.1rem;
-  padding: 8px 10px;
-  border-radius: 6px;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  min-width: 36px;
-  min-height: 36px;
+  font-size: 1.4rem;
+  padding: 4px;
+  transition: transform 0.15s ease, color 0.15s ease;
+  color: #6b7280; /* default gray */
 }
 
-.action-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+.icon-btn:hover {
+  transform: scale(1.2);
+  color: #000;
 }
 
-.action-btn:active {
-  transform: translateY(0);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+.icon-btn:active {
+  transform: scale(1.05);
 }
 
-/* ✅ Edit button (blue) */
-.action-btn.edit {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+/* =============================== */
+/* == SPECIFIC ICON COLORS ====== */
+/* =============================== */
+.icon-btn.edit { 
+  color: #3b82f6; 
 }
 
-.action-btn.edit:hover {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+.icon-btn.run { 
+  color: #f59e0b; 
 }
 
-/* Play button (orange/yellow) */
-.action-btn.play {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+.icon-btn.view { 
+  color: #3499db; 
+  font-weight: bold;
 }
 
-.action-btn.play:hover {
-  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+.icon-btn.delete { 
+  color: #ef4444; 
 }
 
-/* View button (purple) */
-.action-btn.view {
-  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+.icon-btn.edit:hover { 
+  color: #1d4ed8; 
 }
 
-.action-btn.view:hover {
-  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+.icon-btn.run:hover { 
+  color: #d97706; 
 }
 
-/* Delete button (red) */
-.action-btn.delete {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+.icon-btn.view:hover { 
+  color: #6d28d9; 
 }
 
-.action-btn.delete:hover {
-  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+.icon-btn.delete:hover { 
+  color: #b91c1c; 
 }
 
-/* Disabled state */
-.action-btn:disabled {
-  opacity: 0.5;
+/* =============================== */
+/* == DISABLED STATE ============ */
+/* =============================== */
+.icon-btn:disabled {
+  opacity: 0.4;
   cursor: not-allowed;
   transform: none !important;
 }
 
-/* Responsive */
+/* =============================== */
+/* == RESPONSIVE ================ */
+/* =============================== */
 @media (max-width: 768px) {
-  .action-btn {
-    font-size: 1rem;
-    padding: 6px 8px;
-    min-width: 32px;
-    min-height: 32px;
+  .icon-btn {
+    font-size: 1.2rem;
   }
   
   .actions {
-    gap: 4px;
+    gap: 6px;
   }
   
   .job-actions-col {
-    width: 160px;
+    width: 130px;
   }
 }
+
+
 </style>

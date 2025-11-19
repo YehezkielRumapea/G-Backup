@@ -1,63 +1,89 @@
 package service
 
 import (
-	"encoding/json"
 	"fmt"
+	"gbackup-new/backend/internal/models"
+	"gbackup-new/backend/internal/repository"
+	"os/exec"
 	"strings"
-	// Sesuaikan path module
 )
 
-// RcloneFile: Struct untuk parsing output 'rclone lsjson'
-type RcloneFile struct {
-	Name    string `json:"Name"`
-	IsDir   bool   `json:"IsDir"`
-	Size    int64  `json:"Size"`
-	ModTime string `json:"ModTime"` // Bisa time.Time jika parsing diperlukan
-}
-
-// BrowserService interface
 type BrowserService interface {
-	ListFiles(remoteName string, path string) ([]RcloneFile, error)
+	BrowseFiles(remoteName string, path string) (*models.BrowserResponse, error)
+	GetFileInfo(remoteName string, filePath string) (*models.FileItem, error)
+	GetAvailableRemotes() ([]map[string]string, error)
 }
 
 type browserServiceImpl struct {
-	// (Tambahkan LogRepo jika perlu logging error)
+	browserRepo repository.BrowserRepository
 }
 
-func NewBrowserService() BrowserService {
-	return &browserServiceImpl{}
+func NewBrowserService(browserRepo repository.BrowserRepository) BrowserService {
+	return &browserServiceImpl{
+		browserRepo: browserRepo,
+	}
 }
 
-// ListFiles: Menjalankan 'rclone lsjson'
-func (s *browserServiceImpl) ListFiles(remoteName string, path string) ([]RcloneFile, error) {
-
-	// Pastikan path selalu string kosong jika inputnya "/"
-	CleanPath := strings.TrimPrefix(path, "/")
-
-	// 1. Generate command
-	fullPath := fmt.Sprintf("%s:%s", remoteName, CleanPath)
-
-	// ✅ Tambahkan --max-depth 1 untuk navigasi folder interaktif
-	args := []string{
-		"rclone",
-		"lsjson",
-		fullPath,
-		// "--no-mimetype",
-		// "--max-depth", "1", // Limit ke folder saat ini
+// ============================================
+// ✅ BROWSE FILES
+// ============================================
+func (s *browserServiceImpl) BrowseFiles(remoteName string, path string) (*models.BrowserResponse, error) {
+	files, err := s.browserRepo.ListFiles(remoteName, path)
+	if err != nil {
+		return nil, err
 	}
 
-	// 2. Eksekusi
-	result := ExecuteCliJob(args)
-	if !result.Success {
-		// Gabungkan stderr/stdout dari Rclone untuk debugging yang lebih baik
-		return nil, fmt.Errorf("Rclone failed for path '%s'. Detail: %s", fullPath, result.ErrorMsg)
+	// Hitung total size
+	totalSize := int64(0)
+	for _, f := range files {
+		if !f.IsDir {
+			totalSize += f.Size
+		}
 	}
 
-	// 3. Parse JSON
-	var files []RcloneFile
-	if err := json.Unmarshal([]byte(result.Output), &files); err != nil {
-		return nil, fmt.Errorf("gagal parsing output lsjson: %w", err)
+	response := &models.BrowserResponse{
+		Path:      path,
+		Files:     files,
+		TotalSize: totalSize,
 	}
 
-	return files, nil
+	return response, nil
+}
+
+// ============================================
+// ✅ GET FILE INFO
+// ============================================
+func (s *browserServiceImpl) GetFileInfo(remoteName string, filePath string) (*models.FileItem, error) {
+	file, err := s.browserRepo.GetFileInfo(remoteName, filePath)
+	if err != nil {
+		return nil, err
+	}
+	return file, nil
+}
+
+// ============================================
+// ✅ GET AVAILABLE REMOTES (rclone listremotes)
+// ============================================
+func (s *browserServiceImpl) GetAvailableRemotes() ([]map[string]string, error) {
+
+	cmd := exec.Command("rclone", "listremotes")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list remotes: %w", err)
+	}
+
+	remotesList := strings.Split(strings.TrimSpace(string(output)), "\n")
+
+	remotes := []map[string]string{}
+	for _, remote := range remotesList {
+		remote = strings.TrimSuffix(strings.TrimSpace(remote), ":")
+		if remote != "" {
+			remotes = append(remotes, map[string]string{
+				"name":        remote,
+				"description": remote + " (Cloud Storage)",
+			})
+		}
+	}
+
+	return remotes, nil
 }
