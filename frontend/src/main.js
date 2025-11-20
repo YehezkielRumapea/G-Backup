@@ -1,11 +1,13 @@
-import { createApp } from 'vue';
-import App from './App.vue';
-import router from './router'; // PERBAIKI: Impor router dari file terpisah
+import { createApp } from 'vue'
+import { createPinia } from 'pinia' // Import Pinia
 
-import './assets/main.css'; // TAMBAHKAN: Impor file CSS global
+import App from './App.vue'
+import router from './router' // Import Router
+import './assets/main.css'
 
-const app = createApp(App);
+const app = createApp(App)
 
-app.use(router);
+app.use(createPinia()) // Aktifkan Pinia
+app.use(router)      // Aktifkan Router
 
-app.mount('#app');
+app.mount('#app')
