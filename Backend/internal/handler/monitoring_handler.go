@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"gbackup-new/backend/internal/repository"
 	"gbackup-new/backend/internal/service" // Sesuaikan path module
 
 	"github.com/labstack/echo/v4"
@@ -15,18 +16,25 @@ type RemoteStatusResponse struct {
 	Status         string  `json:"status_connect"`
 	StorageUsedGB  float64 `json:"used_storage_gb"`
 	StorageTotalGB float64 `json:"total_storage_gb"`
+	FreeStorageGB  float64 `json:"free_storage_gb"`
 	LastChecked    string  `json:"last_checked_at"`
-	JobRuns        int     `json:"job_runs"` // Placeholder (Akan diisi oleh Service)
+	ActiveJobCount int64   `json:"active_job_count"` // Placeholder (Akan diisi oleh Service)
 }
 
 // MonitoringHandler struct menampung dependency
 type MonitoringHandler struct {
 	MonitoringSvc service.MonitoringService
+	SchedulerSvc  service.SchedulerService
+	LogRepo       repository.LogRepository
 }
 
 // NewMonitoringHandler adalah constructor (Factory)
-func NewMonitoringHandler(svc service.MonitoringService) *MonitoringHandler {
-	return &MonitoringHandler{MonitoringSvc: svc}
+func NewMonitoringHandler(mSvc service.MonitoringService, sSvc service.SchedulerService, lRepo repository.LogRepository) *MonitoringHandler {
+	return &MonitoringHandler{
+		MonitoringSvc: mSvc,
+		SchedulerSvc:  sSvc,
+		LogRepo:       lRepo,
+	}
 }
 
 // ----------------------------------------------------
@@ -53,9 +61,10 @@ func (h *MonitoringHandler) GetRemoteStatusList(c echo.Context) error {
 			Name:           r.RemoteName,
 			Status:         r.StatusConnect,
 			StorageUsedGB:  r.UsedStorageGB,
+			FreeStorageGB:  r.FreeStorageGB,
 			StorageTotalGB: r.TotalStorageGB,
 			LastChecked:    r.LastCheckedAt.Format(time.RFC3339),
-			JobRuns:        0, // Placeholder
+			ActiveJobCount: r.ActiveJobCount, // Placeholder
 		})
 	}
 
@@ -77,4 +86,12 @@ func (h *MonitoringHandler) GetJobLogs(c echo.Context) error {
 
 	// 2. Kirim Logs
 	return c.JSON(http.StatusOK, logs)
+}
+
+func (h *MonitoringHandler) GetScheduledJobs(c echo.Context) error {
+	jobsDTO, err := h.SchedulerSvc.GetScheduledJobsInfo()
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "gagal mengambil daftar jobs" + err.Error()})
+	}
+	return c.JSON(http.StatusOK, jobsDTO)
 }

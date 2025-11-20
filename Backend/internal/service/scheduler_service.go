@@ -5,6 +5,7 @@ import (
 	"time"
 
 	// Sesuaikan path module
+
 	"gbackup-new/backend/internal/repository" // Sesuaikan path module
 
 	"github.com/robfig/cron/v3"
@@ -20,6 +21,7 @@ type JobMonitoringDTO struct {
 	LastRun      string `json:"last_run"`
 	Status       string `json:"status"`
 	NextRun      string `json:"next_run"`
+	FullScript   string `json:"full_script"`
 }
 
 // Interface (Kontrak)
@@ -29,6 +31,7 @@ type SchedulerService interface {
 	CalculateNextRun(schedule string, lastRun time.Time) time.Time
 	GetScheduledJobsInfo() ([]JobMonitoringDTO, error)
 	GetGeneratedScript(jobID uint) (string, error) // Untuk Pratinjau Script
+	GetManualJob() ([]JobMonitoringDTO, error)
 }
 
 // Implementasi Struct
@@ -172,6 +175,11 @@ func (s *schedulerServiceImpl) GetScheduledJobsInfo() ([]JobMonitoringDTO, error
 		nextRunTime := s.CalculateNextRun(job.ScheduleCron, baseTime)
 		mode := "Auto"
 
+		fullScript, err := s.GetGeneratedScript(job.ID)
+		if err != nil {
+			fullScript = "error generating script" + err.Error()
+		}
+
 		// Menggabungkan Tipe dan Path
 		jobTypeFormatted := fmt.Sprintf("%s: %s", job.RcloneMode, job.SourcePath)
 
@@ -183,7 +191,8 @@ func (s *schedulerServiceImpl) GetScheduledJobsInfo() ([]JobMonitoringDTO, error
 			Mode:         mode,
 			LastRun:      lastRunStr,
 			Status:       job.StatusQueue,
-			NextRun:      nextRunTime.Format("02-01-2006 15:04"),
+			NextRun:      nextRunTime.Format("2006-01-02 15:04:05"),
+			FullScript:   fullScript,
 		})
 	}
 	return output, nil
@@ -207,11 +216,49 @@ func (s *schedulerServiceImpl) GetGeneratedScript(jobID uint) (string, error) {
 		job.RemoteName,
 		job.DestinationPath)
 
-	// Gabungkan Script
-	scriptHeader := "#!/bin/bash\n# Script ini dijalankan dengan 'set -eo pipefail'\n\n"
-	preScript := fmt.Sprintf("# === 1. PRE-SCRIPT (User-defined) ===\n%s\n", job.PreScript)
-	rcloneCmdStr := fmt.Sprintf("\n# === 2. RCLONE EXECUTION (System-generated) ===\n%s\n", rcloneCmd)
-	postScript := fmt.Sprintf("\n# === 3. POST-SCRIPT (User-defined) ===\n%s\n", job.PostScript)
+	// 1. Header (Wajib untuk Bash)
+	scriptHeader := "#!/bin/bash\nset -eo pipefail\n\n"
+
+	// 2. Pre-Script
+	preScript := fmt.Sprintf("# // --- PRE-SCRIPT ---\n%s\n", job.PreScript)
+
+	// 3. Rclone Command
+	rcloneCmdStr := fmt.Sprintf("\n# // --- RCLONE COMMAND ---\n%s\n", rcloneCmd)
+
+	// 4. Post-Script
+	postScript := fmt.Sprintf("\n# // --- POST-SCRIPT ---\n%s\n", job.PostScript)
 
 	return scriptHeader + preScript + rcloneCmdStr + postScript, nil
+
+}
+
+func (s *schedulerServiceImpl) GetManualJob() ([]JobMonitoringDTO, error) {
+	jobs, err := s.JobRepo.FindManualJob()
+	if err != nil {
+		return nil, fmt.Errorf("gagal mengambil job manual: %w", err)
+	}
+
+	var output []JobMonitoringDTO
+	for _, job := range jobs {
+		lastRunstr := ""
+		if job.LastRun != nil {
+			lastRunstr = job.LastRun.Format("02-01-2006 15:04")
+		}
+		mode := "manual"
+
+		jobTypeFormatted := fmt.Sprintf("%s: %s", job.RcloneMode, job.SourcePath)
+
+		output = append(output, JobMonitoringDTO{
+			ID:           job.ID,
+			JobName:      job.JobName,
+			Type:         jobTypeFormatted,
+			GdriveTarget: job.RemoteName,
+			Mode:         mode,
+			LastRun:      lastRunstr,
+			Status:       job.StatusQueue,
+			NextRun:      "N/A",
+			FullScript:   "N/A",
+		})
+	}
+	return output, nil
 }

@@ -1,9 +1,15 @@
 package service
 
 import (
+	"encoding/json"
 	"fmt"
 	"gbackup-new/backend/internal/models"
 	"gbackup-new/backend/internal/repository"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -12,16 +18,40 @@ import (
 type BackupService interface {
 	CreateJobAndDispatch(job *models.ScheduledJob) error
 	TriggerManualJob(jobID uint) error
+	DeleteJob(JobId uint) error
+	UpdateJob(jobID uint, updatedJob *models.ScheduledJob) error
+	GetJobByID(jobID uint) (*models.ScheduledJob, error)
 }
 
 type backupServiceImpl struct {
-	JobRepo repository.JobRepository
-	LogRepo repository.LogRepository
+	MonitorRepo repository.MonitoringRepository
+	JobRepo     repository.JobRepository
+	LogRepo     repository.LogRepository
+	MonitorSvc  MonitoringService
 }
 
-func NewBackupService(jRepo repository.JobRepository, lRepo repository.LogRepository) BackupService {
-	return &backupServiceImpl{JobRepo: jRepo, LogRepo: lRepo}
+type RcloneFileInfo struct {
+	Name    string    `json:"Name"`    // Nama file/folder
+	Size    int64     `json:"Size"`    // Ukuran dalam bytes
+	ModTime time.Time `json:"ModTime"` // Waktu modifikasi
+	IsDir   bool      `json:"IsDir"`   // True jika folder
 }
+
+func NewBackupService(
+	jRepo repository.JobRepository,
+	lRepo repository.LogRepository,
+	mRepo repository.MonitoringRepository,
+	mSvc MonitoringService,
+) BackupService {
+	return &backupServiceImpl{
+		JobRepo:     jRepo,
+		LogRepo:     lRepo,
+		MonitorRepo: mRepo,
+		MonitorSvc:  mSvc,
+	}
+}
+
+const MinFreeGB = 1.0
 
 // ----------------------------------------------------
 // FUNGSI UTAMA ORKESTRASI & DISPATCH
@@ -86,6 +116,33 @@ func (s *backupServiceImpl) executeJobLifecycle(job models.ScheduledJob) {
 	var finalResult RcloneResult
 	var finalStatus string
 
+	// 🚨 LANGKAH PENCEGAHAN (Hanya untuk Job Terjadwal) 🚨
+	if job.OperationMode == "BACKUP" && job.ScheduleCron != "" {
+		const MinFreeGB = 1.0 // Batas aman yang dibutuhkan
+
+		// 1. Dapatkan status remote
+		monitor, err := s.MonitorRepo.FindRemoteByName(job.RemoteName)
+		if err == nil && monitor != nil {
+
+			// 2. Hitung/Estimasi ukuran sumber
+			sourceSizeGB, _ := s.CalculateSourceSizeGB(job.SourcePath)
+			requiredSpace := sourceSizeGB + MinFreeGB
+
+			// 3. Bandingkan dan SUSPEND
+			if monitor.FreeStorageGB < requiredSpace {
+				errorMsg := fmt.Sprintf("⛔ Job ditangguhkan: Ruang di %s (%.2f GB) tidak cukup untuk data ini (%.2f GB).",
+					job.RemoteName, monitor.FreeStorageGB, requiredSpace)
+
+				// Catat kegagalan dan SUSPEND Job
+				s.handleJobCompletion(job, RcloneResult{Success: false, ErrorMsg: errorMsg}, "FAIL_STORAGE")
+				s.JobRepo.UpdateJobActivity(job.ID, false) // ✅ SUSPEND JOB
+				fmt.Printf("⛔ [WORKER %d] Job Terjadwal DITANGGUHKAN karena ruang penuh.\n", job.ID)
+				return
+			}
+		}
+		// Jika gagal mendapatkan status monitor, biarkan Job berjalan (risiko kecil).
+	}
+
 	// --- FASE 1: PRE-SCRIPT ---
 	if job.PreScript != "" {
 		fmt.Printf("[WORKER %d] Menjalankan Pre-Script...\n", job.ID)
@@ -103,9 +160,57 @@ func (s *backupServiceImpl) executeJobLifecycle(job models.ScheduledJob) {
 		}
 	}
 
+	// Timestamp
+	// ============================================================
+	// 🆕 FASE 1.5: TIMESTAMP & ROUND ROBIN
+	// ============================================================
+	var runtimeDestPath string
+
+	if job.OperationMode == "BACKUP" {
+		timestamp := time.Now().Format("20060102_150405")
+
+		sourceInfo, err := os.Stat(job.SourcePath)
+		if err != nil {
+			errorMsg := fmt.Sprintf("Failed to stat source path: %v", err)
+			s.handleJobCompletion(job, RcloneResult{Success: false, ErrorMsg: errorMsg}, "FAIL_SOURCE_CHECK")
+			return
+		}
+
+		var newDestinationName string
+
+		var isSourceDir = sourceInfo.IsDir()
+
+		if isSourceDir {
+			// Folder → hasil tetap folder
+			folderName := filepath.Base(job.SourcePath)
+			newDestinationName = fmt.Sprintf("%s_%s", folderName, timestamp)
+		} else {
+			// FILE → hasil tetap file
+			fileName := filepath.Base(job.SourcePath)
+			ext := filepath.Ext(fileName)
+			nameWithoutExt := strings.TrimSuffix(fileName, ext)
+			newDestinationName = fmt.Sprintf("%s_%s%s", nameWithoutExt, timestamp, ext)
+		}
+
+		originalDestPath := job.DestinationPath
+		runtimeDestPath = filepath.Join(originalDestPath, newDestinationName)
+
+		fmt.Printf("[WORKER %d] 🎯 Runtime destination: %s:%s\n", job.ID, job.RemoteName, runtimeDestPath)
+		fmt.Printf("[WORKER %d] 💾 DB destination (unchanged): %s\n", job.ID, job.DestinationPath)
+
+		// Round Robin Cleanup
+		fmt.Printf("[WORKER %d] 🔄 Checking for old backups...\n", job.ID)
+		if err := s.CleanupOldBackups(job.RemoteName, originalDestPath); err != nil {
+			fmt.Printf("⚠️ [WORKER %d] Cleanup warning: %v\n", job.ID, err)
+		}
+	} else {
+		runtimeDestPath = job.DestinationPath
+	}
+	// ============================================================
+
 	// --- FASE 2: RCLONE EXECUTION ---
 	fmt.Printf("[WORKER %d] Menjalankan Rclone...\n", job.ID)
-	rcloneArgs := s.buildRcloneArgs(job)
+	rcloneArgs := s.buildRcloneArgs(job, runtimeDestPath)
 	resultRclone := ExecuteCliJob(rcloneArgs)
 
 	if !resultRclone.Success {
@@ -144,33 +249,47 @@ func (s *backupServiceImpl) executeJobLifecycle(job models.ScheduledJob) {
 // ----------------------------------------------------
 
 // buildRcloneArgs: Menyusun command Rclone
-func (s *backupServiceImpl) buildRcloneArgs(job models.ScheduledJob) []string {
-	// (Implementasi logic inversi path Restore/Backup di sini)
+func (s *backupServiceImpl) buildRcloneArgs(job models.ScheduledJob, runtimeDestPath string) []string {
 	isRestore := job.OperationMode == "RESTORE"
-	var SourcePath, Destination string
 	command := strings.ToLower(job.RcloneMode)
 
+	// Tentukan apakah sumber adalah file atau folder
+	sourceInfo, err := os.Stat(job.SourcePath)
+	isSourceDir := false
+	if err == nil {
+		isSourceDir = sourceInfo.IsDir()
+	}
+
+	var SourcePath, Destination string
+
 	if isRestore {
+		// RESTORE SELALU copy folder atau file dari remote ke lokal
 		SourcePath = fmt.Sprintf("%s:%s", job.RemoteName, job.SourcePath)
 		Destination = job.DestinationPath
-		command = "copy"
-
-		fmt.Printf("[DEBUG INVERSION] Mode di Struct: %s | isRestore: %t | Cmd: %s | Source: %s\n",
-			job.OperationMode,
-			isRestore,
-			command,
-			SourcePath)
+		command = "copy" // restore selalu copy
 	} else {
+		// BACKUP
 		SourcePath = job.SourcePath
-		Destination = fmt.Sprintf("%s:%s", job.RemoteName, job.DestinationPath)
+		Destination = fmt.Sprintf("%s:%s", job.RemoteName, runtimeDestPath)
+
+		if !isSourceDir {
+			// File → gunakan copyto agar tidak dianggap folder
+			command = "copyto"
+		} else {
+			// Folder → tetap copy
+			command = "copy"
+		}
 	}
+
 	args := []string{
 		"rclone",
 		command,
 		SourcePath,
 		Destination,
-		"--checksum", // Flag keamanan
+		"--checksum",
+		"--no-traverse",
 	}
+
 	return args
 }
 
@@ -181,11 +300,12 @@ func (s *backupServiceImpl) handleJobCompletion(job models.ScheduledJob, result 
 
 	// 1. Catat ke tabel Logs
 	newLog := &models.Log{
-		JobID:       &job.ID,
-		Status:      status,
-		Message:     result.Output + result.ErrorMsg,
-		DurationSec: int(result.Duration.Seconds()),
-		Timestamp:   time.Now(),
+		JobID:            &job.ID,
+		Status:           status,
+		Message:          result.Output + result.ErrorMsg,
+		DurationSec:      int(result.Duration.Seconds()),
+		TransferredBytes: result.TransferredBytes,
+		Timestamp:        time.Now(),
 	}
 	s.LogRepo.CreateLog(newLog)
 
@@ -201,4 +321,168 @@ func (s *backupServiceImpl) handleJobCompletion(job models.ScheduledJob, result 
 	}
 
 	s.JobRepo.UpdateLastRunStatus(job.ID, time.Now(), dbStatus)
+}
+
+func (s *backupServiceImpl) CalculateSourceSizeGB(path string) (float64, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0, fmt.Errorf("gagal stat path %s: %w", path, err)
+	}
+	const BytesToGB = 1073741824.0
+	return float64(info.Size()) / BytesToGB, nil
+}
+
+func (s *backupServiceImpl) DeleteJob(JobID uint) error {
+	fmt.Printf("[AUDIT] User meminta penghapusan Job ID: %d\n", JobID)
+
+	// Panggil Repository untuk menghapus
+	if err := s.JobRepo.DeleteJob(JobID); err != nil {
+		return fmt.Errorf("gagal menghapus job ID %d: %w", JobID, err)
+	}
+	return nil
+}
+
+func (s *backupServiceImpl) GetJobByID(jobID uint) (*models.ScheduledJob, error) {
+	job, err := s.JobRepo.FindJobByID(jobID)
+	if err != nil {
+		return nil, err
+	}
+	return job, nil
+}
+func (s *backupServiceImpl) UpdateJob(jobID uint, updatedJob *models.ScheduledJob) error {
+	fmt.Printf("[UPDATE] Memperbarui Job ID: %d\n", jobID)
+
+	// 1. Cek apakah job exist
+	existingJob, err := s.JobRepo.FindJobByID(jobID)
+	if err != nil {
+		return fmt.Errorf("job tidak ditemukan: %w", err)
+	}
+
+	// 2. ✅ Build update map (hanya field yang ada)
+	updates := make(map[string]interface{})
+
+	if updatedJob.JobName != "" {
+		updates["job_name"] = updatedJob.JobName
+	}
+	if updatedJob.OperationMode != "" {
+		updates["operation_mode"] = updatedJob.OperationMode
+	}
+	if updatedJob.RcloneMode != "" {
+		updates["rclone_mode"] = updatedJob.RcloneMode
+	}
+	if updatedJob.SourcePath != "" {
+		updates["source_path"] = updatedJob.SourcePath
+	}
+	if updatedJob.DestinationPath != "" {
+		updates["destination_path"] = updatedJob.DestinationPath
+	}
+	if updatedJob.RemoteName != "" {
+		updates["remote_name"] = updatedJob.RemoteName
+	}
+
+	// ✅ Allow empty string untuk script (untuk clear script)
+	updates["pre_script"] = updatedJob.PreScript
+	updates["post_script"] = updatedJob.PostScript
+
+	// ✅ Schedule cron bisa kosong (untuk ubah jadi manual job)
+	updates["schedule_cron"] = updatedJob.ScheduleCron
+
+	// ✅ IsActive harus explicit check
+	if updatedJob.IsActive != existingJob.IsActive {
+		updates["is_active"] = updatedJob.IsActive
+	}
+
+	updates["updated_at"] = time.Now()
+
+	// 3. ✅ Validate minimal 1 field (exclude updated_at)
+	if len(updates) <= 1 {
+		return fmt.Errorf("tidak ada field yang diubah")
+	}
+
+	// 4. Update ke database
+	if err := s.JobRepo.UpdateJob(jobID, updates); err != nil {
+		return fmt.Errorf("gagal update job: %w", err)
+	}
+
+	fmt.Printf("[UPDATE] Job %d berhasil diperbarui (%d fields)\n", jobID, len(updates)-1)
+	return nil
+}
+
+func (s *backupServiceImpl) CleanupOldBackups(remoteName, destinationPath string) error {
+	const MAX_RETENTION = 10
+
+	fmt.Printf("[Round Robin] Checking backups in %s:%s...\n", remoteName, destinationPath)
+
+	listCmd := fmt.Sprintf("rclone lsjson %s:%s", remoteName, destinationPath)
+	output, err := exec.Command("bash", "-c", listCmd).Output()
+	if err != nil {
+		return fmt.Errorf("failed to list remote files: %w", err)
+	}
+
+	var files []RcloneFileInfo
+	if err := json.Unmarshal(output, &files); err != nil {
+		return fmt.Errorf("failed to parse rclone output: %w", err)
+	}
+
+	var backupItems []RcloneFileInfo
+	timestampPattern := regexp.MustCompile(`_\d{8}_\d{6}`)
+
+	for _, f := range files {
+		if timestampPattern.MatchString(f.Name) {
+			backupItems = append(backupItems, f)
+		}
+	}
+
+	currentCount := len(backupItems)
+	fmt.Printf("[Round Robin] Found %d backup items (limit: %d)\n", currentCount, MAX_RETENTION)
+
+	if currentCount < MAX_RETENTION {
+		fmt.Printf("[Round Robin] No cleanup needed (%d/%d)\n", currentCount, MAX_RETENTION)
+		return nil
+	}
+
+	sort.Slice(backupItems, func(i, j int) bool {
+		return backupItems[i].ModTime.Before(backupItems[j].ModTime)
+	})
+
+	itemsToDelete := currentCount - MAX_RETENTION + 1
+
+	fmt.Printf("[Round Robin] Deleting %d oldest backup(s)...\n", itemsToDelete)
+
+	var deletedItems []string
+	for i := 0; i < itemsToDelete && i < len(backupItems); i++ {
+		itemToDelete := backupItems[i]
+		fullPath := fmt.Sprintf("%s:%s/%s", remoteName, destinationPath, itemToDelete.Name)
+
+		var deleteCmd string
+		if itemToDelete.IsDir {
+			deleteCmd = fmt.Sprintf("rclone purge %s", fullPath)
+		} else {
+			deleteCmd = fmt.Sprintf("rclone delete %s", fullPath)
+		}
+
+		if err := exec.Command("bash", "-c", deleteCmd).Run(); err != nil {
+			fmt.Printf("⚠️  [Round Robin] Failed to delete %s: %v\n", itemToDelete.Name, err)
+			continue
+		}
+
+		deletedItems = append(deletedItems, itemToDelete.Name)
+
+		itemType := "file"
+		sizeStr := fmt.Sprintf("%.2f MB", float64(itemToDelete.Size)/(1024*1024))
+		if itemToDelete.IsDir {
+			itemType = "folder"
+			sizeStr = "folder"
+		}
+
+		fmt.Printf("🗑️  [Round Robin] Deleted %s: %s (date: %s, size: %s)\n",
+			itemType,
+			itemToDelete.Name,
+			itemToDelete.ModTime.Format("2006-01-02 15:04:05"),
+			sizeStr,
+		)
+	}
+
+	fmt.Printf("✅ [Round Robin] Cleanup complete. Deleted %d item(s). Space available for new backup.\n", len(deletedItems))
+	return nil
 }

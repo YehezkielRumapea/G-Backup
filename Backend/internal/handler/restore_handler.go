@@ -14,7 +14,6 @@ import (
 // Hanya menerima input minimal yang diperlukan untuk Restore.
 type RestoreRequestDTO struct {
 	SourcePath      string `json:"source_path" validate:"required"` // Path file di Cloud
-	OperationMode   string `json:"operation_mode" validate:"required"`
 	RemoteName      string `json:"remote_name" validate:"required"`
 	DestinationPath string `json:"destination_path" validate:"required"` // Path Lokal Target
 }
@@ -42,7 +41,7 @@ func (h *RestoreHandler) TriggerRestore(c echo.Context) error {
 	newJob := models.ScheduledJob{
 		UserID: userID,
 		// Auto-generate nama Job (karena user tidak input)
-		JobName: fmt.Sprintf("Manual Restore - %d", time.Now().Unix()),
+		JobName: fmt.Sprintf("Restore - %d", time.Now().Unix()),
 
 		OperationMode:   "RESTORE", // Flag Kritis
 		RcloneMode:      "copy",    // Restore selalu "copy"

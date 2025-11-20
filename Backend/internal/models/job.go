@@ -22,7 +22,7 @@ type ScheduledJob struct {
 	// Penjadwalan dan Status
 	ScheduleCron string     `gorm:"size:50;nullable"` // Boleh NULL
 	Priority     int        `gorm:"default:5"`
-	StatusQueue  string     `gorm:"type:enum('PENDING','RUNNING','COMPLETED','FAIL_PRE_SCRIPT','FAIL_RCLONE','FAIL_POST_SCRIPT');default:'PENDING'"`
+	StatusQueue  string     `gorm:"type:enum('PENDING','RUNNING','COMPLETED','FAIL_PRE_SCRIPT','FAIL_RCLONE','FAIL_POST_SCRIPT','FAIL_SOURCE_CHECK');default:'PENDING'"`
 	IsActive     bool       `gorm:"default:true"`
 	LastRun      *time.Time `gorm:"column:last_run_at;nullable"`
 

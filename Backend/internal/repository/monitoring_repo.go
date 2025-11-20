@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"errors"
+	"fmt"
 	"gbackup-new/backend/internal/models" // Sesuaikan path module
 
 	"gorm.io/gorm"
@@ -11,6 +13,7 @@ import (
 type MonitoringRepository interface {
 	UpsertRemoteStatus(monitor *models.Monitoring) error
 	FindAllRemotes() ([]models.Monitoring, error)
+	FindRemoteByName(remoteName string) (*models.Monitoring, error)
 }
 
 // monitoringRepositoryImpl adalah implementasi (BAGAIMANA dilakukan)
@@ -59,4 +62,16 @@ func (r *monitoringRepositoryImpl) FindAllRemotes() ([]models.Monitoring, error)
 	}
 
 	return remotes, nil
+}
+
+func (r *monitoringRepositoryImpl) FindRemoteByName(remoteName string) (*models.Monitoring, error) {
+	var monitor models.Monitoring
+	result := r.DB.Where("remote_name = ?", remoteName).First(&monitor)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("remote name %s tidak ditemukan", remoteName)
+		}
+		return nil, result.Error
+	}
+	return &monitor, nil
 }

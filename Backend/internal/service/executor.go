@@ -11,10 +11,11 @@ import (
 // (Nama ini bisa diubah menjadi 'CliResult' jika Anda mau,
 // karena ini menangani Rclone, Bash, dan Mysqldump)
 type RcloneResult struct {
-	Success  bool
-	Output   string
-	ErrorMsg string
-	Duration time.Duration
+	Success          bool
+	Output           string
+	ErrorMsg         string
+	Duration         time.Duration
+	TransferredBytes int64
 }
 
 // ExecuteCliJob: Menjalankan command CLI APAPUN

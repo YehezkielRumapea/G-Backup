@@ -73,31 +73,33 @@ func main() {
 	jobRepo := repository.NewJobRepository(dbInstance)
 	logRepo := repository.NewLogRepository(dbInstance)
 	monitorRepo := repository.NewMonitoringRepository(dbInstance)
+	browserRepo := repository.NewBrowserRepository()
 	// remoteRepo := repository.NewRemoteRepository(dbInstance) // Untuk "Add Remote"
 
 	// 3.2. Inisialisasi Service (Lapisan Logika Bisnis)
 	authSvc := service.NewAuthService(userRepo, jwtSecretKey)
-	monitorSvc := service.NewMonitoringService(monitorRepo, logRepo)
-	backupSvc := service.NewBackupService(jobRepo, logRepo) // Orkestrator 3 Fase
+	monitorSvc := service.NewMonitoringService(monitorRepo, logRepo, jobRepo)
+	backupSvc := service.NewBackupService(jobRepo, logRepo, monitorRepo, monitorSvc) // Orkestrator 3 Fase
 	schedulerSvc := service.NewSchedulerService(jobRepo, backupSvc)
-	browserSvc := service.NewBrowserService()
+	browserSvc := service.NewBrowserService(browserRepo)
 	// remoteSvc := service.NewRemoteService(remoteRepo) // Service "Add Remote"
 
 	// 3.3. Inisialisasi Handler (Controller Layer)
 	authHandler := handler.NewAuthHandler(authSvc)
-	monitorHandler := handler.NewMonitoringHandler(monitorSvc)
-	jobHandler := handler.NewJobHandler(schedulerSvc, backupSvc) // Membutuhkan BackupSvc untuk TriggerManual
+	monitorHandler := handler.NewMonitoringHandler(monitorSvc, schedulerSvc, logRepo)
+	jobHandler := handler.NewJobHandler(schedulerSvc, backupSvc, jobRepo) // Membutuhkan BackupSvc untuk TriggerManual
 	backupHandler := handler.NewBackupHandler(backupSvc)
 	restoreHandler := handler.NewRestoreHandler(backupSvc)
 	browserHandler := handler.NewBrowserHandler(browserSvc)
+	setupHandler := handler.NewSetupHandler(authSvc)
 	// remoteHandler := handler.NewRemoteHandler(remoteSvc)
 
 	// --- 4. SEEDING ADMIN AWAL ---
-	if err := authSvc.RegisterAdmin(DefaultAdminUsername, DefaultAdminPassword); err != nil {
-		fmt.Printf("Admin Seeding Status: %v\n", err)
-	} else {
-		fmt.Println("✅ Admin user berhasil dibuat.")
-	}
+	// if err := authSvc.RegisterAdmin(DefaultAdminUsername, DefaultAdminPassword); err != nil {
+	// fmt.Printf("Admin Seeding Status: %v\n", err)
+	// } else {
+	// fmt.Println("✅ Admin user berhasil dibuat.")
+	// }
 
 	// --- 5. SETUP WEB SERVER ECHO ---
 	e := echo.New()
@@ -113,8 +115,21 @@ func main() {
 		return c.String(http.StatusOK, "G-Backup New Architecture is Running!")
 	})
 
+	// ===========================================
+	// RUTE PUBLIK UTAMA (TIDAK DILINDUNGI JWT)
+	// ===========================================
+
 	// Rute Publik (Login)
 	e.POST("/api/v1/auth/login", authHandler.Login)
+
+	// ⭐ KOREKSI DI SINI: GUNAKAN PATH LENGKAP /api/v1/setup AGAR TIDAK TERKENA JWT MIDDLEWARE
+	setupGroup := e.Group("/api/v1/setup")
+	setupGroup.GET("/status", setupHandler.GetSetupStatus)          // Cek apakah admin sudah ada
+	setupGroup.POST("/register", setupHandler.RegisterInitialAdmin) // Registrasi admin pertama
+
+	// ===========================================
+	// RUTE PRIVAT (DILINDUNGI JWT)
+	// ===========================================
 
 	// Rute Privat (Dilindungi JWT)
 	r := e.Group("/api/v1")
@@ -122,19 +137,34 @@ func main() {
 		SigningKey: []byte(jwtSecretKey),
 	})) // Menerapkan Middleware JWT
 
+	// Authentication Endpoints (Catatan: Ini sudah di bawah JWT, hanya bisa diakses setelah login)
+	// Jika Anda ingin user bisa menggunakan setupHandler.Login (ya	ng biasanya dipakai untuk register)
+	// pada rute ini setelah setup selesai, pastikan Anda menggunakan authHandler.Login di sini,
+	// atau pindahkan semua rute Auth ke public/r.
+	// Saat ini authHandler.Login sudah ada di atas (publik), jadi rute ini di bawah JWT tidak efisien.
+	// authGroup := r.Group("/auth")
+	// authGroup.POST("/login", setupHandler.Login) // Hapus atau ganti dengan r.POST("/auth/login", authHandler.Login) jika perlu
+
 	// Rute Monitoring dan Logs
 	r.GET("/monitoring/remotes", monitorHandler.GetRemoteStatusList)
 	r.GET("/monitoring/logs", monitorHandler.GetJobLogs)
+	r.GET("/monitoring/jobs", monitorHandler.GetScheduledJobs)
 
 	// Rute Job Management (Create, List, Trigger)
 	r.GET("/jobs/scheduled", jobHandler.GetScheduledJobs)    // List Job Monitoring
 	r.GET("/jobs/script/:id", jobHandler.GetJobScript)       // Pratinjau Script
 	r.POST("/jobs/trigger/:id", jobHandler.TriggerManualJob) // Tombol "Run Now"
+	r.GET("/jobs/manual", jobHandler.GetManualJob)
+	r.DELETE("/jobs/delete/:id", jobHandler.DeleteJob)
+	r.PUT("/jobs/update/:id", jobHandler.UpdateJob)
+	r.GET("/jobs/:id", jobHandler.GetJobByID)
 
 	// Rute Aksi
 	r.POST("/jobs/new", backupHandler.CreateNewJob)        // Create Backup (Manual/Auto)
 	r.POST("/jobs/restore", restoreHandler.TriggerRestore) // Create Restore
-	r.GET("/browser/list", browserHandler.ListFiles)
+	r.GET("/browser/files", browserHandler.ListFiles)
+	r.GET("/browser/remotes", browserHandler.GetAvailableRemotes)
+	r.GET("/browser/info", browserHandler.GetFileInfo)
 
 	// Rute Konfigurasi
 	// r.POST("/remotes/new", remoteHandler.AddNewRemote) // Add New Remote
