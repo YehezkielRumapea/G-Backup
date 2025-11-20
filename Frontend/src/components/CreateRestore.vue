@@ -17,13 +17,13 @@
               <div class="step-label">Select Remote</div>
             </div>
             <div class="step-line" :class="{ completed: currentStep > 1 }"></div>
-            
+
             <div :class="['step', { active: currentStep >= 2, completed: currentStep > 2 }]">
               <div class="step-number">2</div>
               <div class="step-label">Select File</div>
             </div>
             <div class="step-line" :class="{ completed: currentStep > 2 }"></div>
-            
+
             <div :class="['step', { active: currentStep >= 3 }]">
               <div class="step-number">3</div>
               <div class="step-label">Destination</div>
@@ -34,7 +34,7 @@
           <div v-show="currentStep === 1" class="step-content">
             <h3>☁️ Pilih Cloud Storage</h3>
             <p class="form-description">Pilih drive cloud mana yang berisi file backup</p>
-            
+
             <div v-if="loadingRemotes" class="loading">
               <div class="spinner"></div>
               <p>Loading remotes...</p>
@@ -44,17 +44,14 @@
               <p>❌ Tidak ada remote ditemukan</p>
             </div>
 
-            <div v-else class="remotes-grid">
-              <button 
-                v-for="remote in remotesList"
-                :key="remote.name"
-                @click="selectRemote(remote.name)"
-                :class="['remote-card', { selected: selectedRemote === remote.name }]"
-                type="button"
-              >
-                <div class="remote-icon">☁️</div>
-                <div class="remote-name">{{ remote.name }}</div>
-              </button>
+            <div v-else class="form-group">
+              <label for="restore-remote">Remote Name *</label>
+              <select id="restore-remote" v-model="selectedRemote" required>
+                <option value="" disabled>Pilih Remote</option>
+                <option v-for="remote in remotesList" :key="remote.name" :value="remote.name">
+                  {{ remote.name }}
+                </option>
+              </select>
             </div>
 
             <div class="step-actions">
@@ -74,7 +71,7 @@
           <div v-show="currentStep === 2" class="step-content">
             <h3>📦 Pilih File atau Folder</h3>
             <p class="form-description">Pilih file/folder dari {{ selectedRemote }} yang ingin di-restore</p>
-            
+
             <div class="file-browser-wrapper">
               <GDriveBrowser
                 v-if="selectedRemote"
@@ -126,12 +123,11 @@
               </div>
               <div class="review-item">
                 <strong>Path:</strong>
-                <span>{{ selectedFile?.path }}</span>
+                <span>{{ selectedRemote }}:{{ selectedFile?.path }}</span>
               </div>
             </div>
 
             <form @submit.prevent="handleRestoreSubmit" class="config-form">
-              <!-- Destination Path Input -->
               <div class="form-group">
                 <label for="restore-dest">Lokasi Penyimpanan di Server *</label>
                 <input 
@@ -144,21 +140,18 @@
                 <small class="hint">Contoh: /home/user/restore atau /opt/backups</small>
               </div>
 
-              <!-- Error Message -->
               <transition name="fade">
                 <div v-if="errorMessage" class="message error">
                   {{ errorMessage }}
                 </div>
               </transition>
 
-              <!-- Success Message -->
               <transition name="fade">
                 <div v-if="successMessage" class="message success">
                   {{ successMessage }}
                 </div>
               </transition>
 
-              <!-- Form Actions -->
               <div class="step-actions">
                 <button type="button" @click="goToStep(2)" class="btn-secondary" :disabled="isLoading">
                   ← Kembali
@@ -184,16 +177,12 @@
 import { ref, watch } from 'vue'
 import GDriveBrowser from '@/components/GDriveBrowser.vue'
 import jobService from '@/services/jobService'
-import { useRouter } from 'vue-router'
 import driveService from '../services/driveService'
 
-// Props & Emits
 const props = defineProps({
   isVisible: { type: Boolean, default: false }
 })
 const emit = defineEmits(['close', 'success'])
-
-const router = useRouter()
 
 // Step management
 const currentStep = ref(1)
@@ -219,34 +208,17 @@ const successMessage = ref(null)
 // ============================================
 
 // Load remotes
-// CreateRestore.vue (Fungsi loadRemotes yang Dikoreksi)
-
 async function loadRemotes() {
- loadingRemotes.value = true
- try {
-  const response = await driveService.listRemotes()
-    
-    // Asumsi: Kita menggunakan solusi koreksi sebelumnya di mana response adalah array atau object
-    // Jika backend mengembalikan array langsung:
-    remotesList.value = Array.isArray(response) ? response : (response.remotes || []) 
-
- } catch (error) { 
-  console.error('Failed to load remotes:', error)
-    
-    // Hapus baris yang salah. Cukup set ke array kosong.
-  remotesList.value = [] 
-    
-    // Opsional: Jika Anda ingin menampilkan error ke UI (remotesList.value.length === 0)
-    // Anda bisa mengatur variabel error baru di state.
-    
- } finally {
-  loadingRemotes.value = false
- }
-}
-
-// Select remote
-function selectRemote(remoteName) {
-  selectedRemote.value = remoteName
+  loadingRemotes.value = true
+  try {
+    const response = await driveService.listRemotes()
+    remotesList.value = Array.isArray(response) ? response : (response.remotes || [])
+  } catch (error) {
+    console.error('Failed to load remotes:', error)
+    remotesList.value = []
+  } finally {
+    loadingRemotes.value = false
+  }
 }
 
 // Handle file selection from browser
@@ -274,7 +246,7 @@ async function handleRestoreSubmit() {
 
   try {
     const response = await jobService.createRestoreJob({
-      source_remote: selectedRemote.value,
+      remote_name: selectedRemote.value,
       source_path: selectedFile.value.path,
       destination_path: destinationPath.value,
       job_name: `Restore ${selectedFile.value.name}`
@@ -283,9 +255,7 @@ async function handleRestoreSubmit() {
     successMessage.value = response.message || 'Restore job berhasil dimulai!'
     emit('success')
 
-    // Close modal dan redirect
     setTimeout(() => close(), 1500)
-    setTimeout(() => router.push('/logs'), 1500)
   } catch (error) {
     console.error('Trigger restore error:', error)
     errorMessage.value = error.response?.data?.error || 'Gagal memulai restore'
@@ -474,45 +444,6 @@ watch(() => props.isVisible, (newVal) => {
   background: #10b981;
 }
 
-/* Remotes Grid */
-.remotes-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.remote-card {
-  background: #000000;
-  border: 2px solid #ffffff;
-  border-radius: 8px;
-  padding: 1.25rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  text-align: center;
-}
-
-.remote-card:hover {
-  border-color: #3b82f6;
-  background: #f0f8ff;
-}
-
-.remote-card.selected {
-  background: #3b82f6;
-  border-color: #3b82f6;
-  color: rgb(0, 0, 0);
-}
-
-.remote-icon {
-  font-size: 2rem;
-  margin-bottom: 0.5rem;
-}
-
-.remote-name {
-  font-weight: 600;
-  font-size: 0.9375rem;
-}
-
 /* File Browser */
 .file-browser-wrapper {
   margin-bottom: 1.5rem;
@@ -590,6 +521,7 @@ watch(() => props.isVisible, (newVal) => {
   font-size: 0.875rem;
 }
 
+.form-group select,
 .form-group input[type="text"] {
   width: 100%;
   padding: 0.625rem 0.875rem;
@@ -600,6 +532,7 @@ watch(() => props.isVisible, (newVal) => {
   box-sizing: border-box;
 }
 
+.form-group select:focus,
 .form-group input:focus {
   outline: none;
   border-color: #3b82f6;
@@ -698,76 +631,9 @@ watch(() => props.isVisible, (newVal) => {
 
 .btn-submit {
   background: #1a1a1a;
-  color: white;
-  flex: 1;
+ 
 }
-
 .btn-submit:hover:not(:disabled) {
-  background: #333;
-}
-
-.btn-restore {
-  background: #ef4444;
-  color: white;
-  flex: 1;
-}
-
-.btn-restore:hover:not(:disabled) {
-  background: #dc2626;
-}
-
-.btn-secondary:disabled,
-.btn-submit:disabled,
-.btn-restore:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* Transitions */
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.2s;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .modal-content {
-    width: 95%;
-    max-height: 95vh;
-  }
-  
-  .restore-view {
-    padding: 1rem;
-  }
-
-  .step-indicator {
-    flex-direction: column;
-    gap: 0;
-    margin-bottom: 1.5rem;
-  }
-
-  .step-line {
-    width: 2px;
-    height: 20px;
-  }
-
-  .remotes-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .step-actions {
-    flex-direction: column;
-  }
-
-  .btn-secondary,
-  .btn-submit,
-  .btn-restore {
-    width: 100%;
-  }
+  background: #333333;
 }
 </style>

@@ -6,59 +6,38 @@
           <h2>Backup Configuration</h2>
           <button class="close-btn" @click="close">×</button>
         </div>  
-        
+
         <form @submit.prevent="handleBackupSubmit" class="config-form">
-          <p class="form-description">Buat template Job baru (Manual atau Terjadwal). Logika backup harus disediakan di Pre-Script.</p>
+          <p class="form-description">Buat template Job baru (Manual atau Terjadwal).</p>
 
           <!-- Job Name -->
           <div class="form-group">
             <label for="backup-jobName">Job Name *</label>
-            <input 
-              type="text" 
-              id="backup-jobName" 
-              v-model="backupForm.job_name" 
-              required 
-              placeholder="e.g., Daily Database Backup"
-            />
+            <input type="text" id="backup-jobName" v-model="backupForm.job_name" required placeholder="e.g., Daily Database Backup" />
           </div>
 
           <!-- Source Path -->
           <div class="form-group">
             <label for="backup-source">Source Path (Lokal) *</label>
-            <input 
-              type="text" 
-              id="backup-source" 
-              v-model="backupForm.source_path" 
-              required 
-              placeholder="/tmp/backup_file.zip"
-            />
-            <small class="hint">Path file hasil dari pre-script yang akan di-upload</small>
+            <input type="text" id="backup-source" v-model="backupForm.source_path" required placeholder="/tmp/backup_file.zip" />
           </div>
 
-          <!-- Remote Name -->
+          <!-- Remote Name (Dropdown List) -->
           <div class="form-group">
             <label for="backup-remote">Remote Name *</label>
-            <input 
-              type="text" 
-              id="backup-remote" 
-              v-model="backupForm.remote_name" 
-              required 
-              placeholder="Gdrive1"
-            />
+            <select id="backup-remote" v-model="backupForm.remote_name" required>
+              <option value="" disabled>Select Remote</option>
+              <option v-for="remote in remoteList" :key="remote.name" :value="remote.name">
+                {{ remote.name }}
+              </option>
+            </select>
             <small class="hint">Nama remote yang sudah dikonfigurasi di rclone</small>
           </div>
 
           <!-- Destination Path -->
           <div class="form-group">
             <label for="backup-dest">Destination Path (Cloud) *</label>
-            <input 
-              type="text" 
-              id="backup-dest" 
-              v-model="backupForm.destination_path" 
-              required 
-              placeholder="/backups/database/"
-            />
-            <small class="hint">Folder tujuan di cloud storage</small>
+            <input type="text" id="backup-dest" v-model="backupForm.destination_path" required placeholder="/backups/database/" />
           </div>
 
           <!-- Schedule Section -->
@@ -66,14 +45,8 @@
             <div class="section-header">
               <h3>Schedule Configuration</h3>
               <label class="toggle-switch">
-                <input 
-                  type="checkbox" 
-                  v-model="isScheduled"
-                  @change="handleScheduleToggle"
-                />
-                <span class="toggle-label">
-                  {{ isScheduled ? 'Scheduled Job' : 'Manual Job' }}
-                </span>
+                <input type="checkbox" v-model="isScheduled" @change="handleScheduleToggle" />
+                <span class="toggle-label">{{ isScheduled ? 'Scheduled Job' : 'Manual Job' }}</span>
               </label>
             </div>
 
@@ -81,109 +54,66 @@
             <transition name="slide-fade">
               <div v-if="isScheduled" class="schedule-options">
                 <div class="schedule-type-selector">
-                  <button 
-                    type="button"
-                    v-for="type in scheduleTypes" 
-                    :key="type.value"
+                  <button type="button" v-for="type in scheduleTypes" :key="type.value"
                     @click="selectScheduleType(type.value)"
-                    :class="['type-btn', { active: scheduleType === type.value }]"
-                  >
+                    :class="['type-btn', { active: scheduleType === type.value }]">
                     <span class="type-label">{{ type.label }}</span>
                   </button>
                 </div>
 
-                <!-- HOURLY -->
+                <!-- Hourly -->
                 <div v-if="scheduleType === 'hourly'" class="schedule-config">
                   <label>Every</label>
                   <div class="input-group">
-                    <input 
-                      type="number" 
-                      v-model.number="scheduleConfig.hours"
-                      min="1"
-                      max="23"
-                      class="time-input"
-                    />
+                    <input type="number" v-model.number="scheduleConfig.hours" min="1" max="23" class="time-input" />
                     <span class="input-suffix">hour(s)</span>
                   </div>
                 </div>
 
-                <!-- DAILY -->
+                <!-- Daily -->
                 <div v-if="scheduleType === 'daily'" class="schedule-config">
                   <label>Every day at</label>
                   <div class="input-group">
-                    <input 
-                      type="time" 
-                      v-model="scheduleConfig.time"
-                      class="time-input"
-                    />
+                    <input type="time" v-model="scheduleConfig.time" class="time-input" />
                   </div>
                 </div>
 
-                <!-- WEEKLY -->
+                <!-- Weekly -->
                 <div v-if="scheduleType === 'weekly'" class="schedule-config">
                   <label>Every</label>
                   <div class="weekdays-selector">
-                    <button 
-                      type="button"
-                      v-for="day in weekdays" 
-                      :key="day.value"
-                      @click="toggleWeekday(day.value)"
-                      :class="['weekday-btn', { active: scheduleConfig.weekdays.includes(day.value) }]"
-                    >
+                    <button type="button" v-for="day in weekdays" :key="day.value" @click="toggleWeekday(day.value)"
+                      :class="['weekday-btn', { active: scheduleConfig.weekdays.includes(day.value) }]">
                       {{ day.short }}
                     </button>
                   </div>
                   <label>at</label>
                   <div class="input-group">
-                    <input 
-                      type="time" 
-                      v-model="scheduleConfig.time"
-                      class="time-input"
-                    />
+                    <input type="time" v-model="scheduleConfig.time" class="time-input" />
                   </div>
                 </div>
 
-                <!-- MONTHLY -->
+                <!-- Monthly -->
                 <div v-if="scheduleType === 'monthly'" class="schedule-config">
                   <label>On day</label>
                   <div class="input-group">
-                    <input 
-                      type="number" 
-                      v-model.number="scheduleConfig.dayOfMonth"
-                      min="1"
-                      max="31"
-                      class="time-input"
-                    />
+                    <input type="number" v-model.number="scheduleConfig.dayOfMonth" min="1" max="31" class="time-input" />
                     <span class="input-suffix">of every month</span>
                   </div>
                   <label>at</label>
                   <div class="input-group">
-                    <input 
-                      type="time" 
-                      v-model="scheduleConfig.time"
-                      class="time-input"
-                    />
+                    <input type="time" v-model="scheduleConfig.time" class="time-input" />
                   </div>
                 </div>
 
-                <!-- CUSTOM -->
+                <!-- Custom -->
                 <div v-if="scheduleType === 'custom'" class="schedule-config">
                   <label>Custom Cron Expression</label>
-                  <input 
-                    type="text" 
-                    v-model="scheduleConfig.customCron"
-                    placeholder="*/5 * * * *"
-                    class="cron-input"
-                  />
-                  <small class="hint">
-                    Format: minute hour day month weekday
-                    <a href="https://crontab.guru" target="_blank" rel="noopener">
-                      Need help? →
-                    </a>
-                  </small>
+                  <input type="text" v-model="scheduleConfig.customCron" placeholder="*/5 * * * *" class="cron-input" />
+                  <small class="hint">Format: minute hour day month weekday <a href="https://crontab.guru" target="_blank">Need help?</a></small>
                 </div>
 
-                <!-- CRON PREVIEW -->
+                <!-- Cron Preview -->
                 <div class="cron-preview">
                   <span class="preview-label">Cron Expression:</span>
                   <code class="preview-code">{{ generatedCron || '-' }}</code>
@@ -196,57 +126,36 @@
           <!-- Pre-Script -->
           <div class="form-group">
             <label for="backup-pre">Pre-Script (Executed BEFORE Rclone)</label>
-            <textarea 
-              id="backup-pre" 
-              v-model="backupForm.pre_script" 
-              rows="1" 
-              placeholder="#!/bin/bash
+            <textarea id="backup-pre" v-model="backupForm.pre_script" rows="3" placeholder="#!/bin/bash
 # Example: Database dump
 mysqldump -u user -p password database > /tmp/backup.sql
-gzip /tmp/backup.sql"
-            ></textarea>
-            <small class="hint">Script untuk generate file backup (e.g., mysqldump, tar, zip)</small>
+gzip /tmp/backup.sql"></textarea>
           </div>
 
           <!-- Post-Script -->
           <div class="form-group">
             <label for="backup-post">Post-Script (Executed AFTER successful upload)</label>
-            <textarea 
-              id="backup-post" 
-              v-model="backupForm.post_script" 
-              rows="1" 
-              placeholder="#!/bin/bash
+            <textarea id="backup-post" v-model="backupForm.post_script" rows="3" placeholder="#!/bin/bash
 # Example: Cleanup
-rm /tmp/backup.sql.gz"
-            ></textarea>
-            <small class="hint">Script untuk cleanup atau notifikasi</small>
+rm /tmp/backup.sql.gz"></textarea>
           </div>
 
           <!-- Buttons -->
           <div class="form-actions">
-            <button type="button" @click="resetForm" class="btn-secondary">
-              Reset
-            </button>
+            <button type="button" @click="resetForm" class="btn-secondary">Reset</button>
             <button type="submit" :disabled="isLoading" class="btn-submit">
               <span v-if="isLoading">Processing...</span>
-              <span v-else>
-                {{ isScheduled ? 'Create Scheduled Job' : 'Create & Run Manual Job' }}
-              </span>
+              <span v-else>{{ isScheduled ? 'Create Scheduled Job' : 'Create & Run Manual Job' }}</span>
             </button>
           </div>
         </form>
 
         <!-- Messages -->
         <transition name="fade">
-          <div v-if="message" class="message success">
-            {{ message }}
-          </div>
+          <div v-if="message" class="message success">{{ message }}</div>
         </transition>
-
         <transition name="fade">
-          <div v-if="errorMessage" class="message error">
-            {{ errorMessage }}
-          </div>
+          <div v-if="errorMessage" class="message error">{{ errorMessage }}</div>
         </transition>
       </div>
     </div>
@@ -254,48 +163,36 @@ rm /tmp/backup.sql.gz"
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue';
-import { useRouter } from 'vue-router';
-import jobService from '@/services/jobService';
+import { ref, computed, watch, onMounted } from 'vue'
+import jobService from '@/services/jobService'
+import driveService from '@/services/driveService'
 
-const props = defineProps({
-  isVisible: Boolean
-})
-const emit = defineEmits(['close', 'success'])
+const props = defineProps({ isVisible: Boolean })
+const emit = defineEmits(['close','success'])
 
-const router = useRouter();
+const isLoading = ref(false)
+const message = ref(null)
+const errorMessage = ref(null)
 
-const isLoading = ref(false);
-const message = ref(null);
-const errorMessage = ref(null);
-
-const isScheduled = ref(false);
-const scheduleType = ref('daily');
-const scheduleConfig = ref({
-  hours: 1,
-  time: '00:00',
-  weekdays: [],
-  dayOfMonth: 1,
-  customCron: ''
-});
-
+const isScheduled = ref(false)
+const scheduleType = ref('daily')
+const scheduleConfig = ref({ hours: 1, time: '00:00', weekdays: [], dayOfMonth: 1, customCron: '' })
 const scheduleTypes = [
   { value: 'hourly', label: 'Hourly' },
   { value: 'daily', label: 'Daily' },
   { value: 'weekly', label: 'Weekly' },
   { value: 'monthly', label: 'Monthly' },
   { value: 'custom', label: 'Custom' }
-];
-
+]
 const weekdays = [
-  { value: 0, short: 'Sun', full: 'Sunday' },
-  { value: 1, short: 'Mon', full: 'Monday' },
-  { value: 2, short: 'Tue', full: 'Tuesday' },
-  { value: 3, short: 'Wed', full: 'Wednesday' },
-  { value: 4, short: 'Thu', full: 'Thursday' },
-  { value: 5, short: 'Fri', full: 'Friday' },
-  { value: 6, short: 'Sat', full: 'Saturday' }
-];
+  { value: 0, short: 'Sun' },
+  { value: 1, short: 'Mon' },
+  { value: 2, short: 'Tue' },
+  { value: 3, short: 'Wed' },
+  { value: 4, short: 'Thu' },
+  { value: 5, short: 'Fri' },
+  { value: 6, short: 'Sat' }
+]
 
 const backupForm = ref({
   job_name: '',
@@ -306,118 +203,75 @@ const backupForm = ref({
   schedule_cron: '',
   pre_script: '',
   post_script: ''
-});
+})
+
+const remoteList = ref([])
+
+// Fetch remote list from endpoint
+async function fetchRemoteList() {
+  try {
+    const res = await driveService.listRemotes()
+    // jika API mengembalikan { remotes: [...] }, pakai res.remotes
+    // jika langsung array, pakai res
+    remoteList.value = Array.isArray(res) ? res : res.remotes || []
+  } catch (err) {
+    console.error('Failed to fetch remotes:', err)
+  }
+}
+
+onMounted(() => fetchRemoteList())
+
 
 const generatedCron = computed(() => {
-  if (!isScheduled.value) return '';
-  const cfg = scheduleConfig.value;
-
-  switch (scheduleType.value) {
-    case 'hourly':
-      return `0 */${cfg.hours} * * *`;
-    case 'daily': {
-      const [h, m] = cfg.time.split(':');
-      return `${m} ${h} * * *`;
-    }
-    case 'weekly': {
-      const [h, m] = cfg.time.split(':');
-      const days = cfg.weekdays.sort().join(',');
-      return days ? `${m} ${h} * * ${days}` : '';
-    }
-    case 'monthly': {
-      const [h, m] = cfg.time.split(':');
-      return `${m} ${h} ${cfg.dayOfMonth} * *`;
-    }
-    case 'custom':
-      return cfg.customCron;
-    default:
-      return '';
+  if (!isScheduled.value) return ''
+  const cfg = scheduleConfig.value
+  switch(scheduleType.value){
+    case 'hourly': return `0 */${cfg.hours} * * *`
+    case 'daily': { const [h,m]=cfg.time.split(':'); return `${m} ${h} * * *` }
+    case 'weekly': { const [h,m]=cfg.time.split(':'); const days=cfg.weekdays.sort().join(','); return days? `${m} ${h} * * ${days}`:'' }
+    case 'monthly': { const [h,m]=cfg.time.split(':'); return `${m} ${h} ${cfg.dayOfMonth} * *` }
+    case 'custom': return cfg.customCron
+    default: return ''
   }
-});
+})
 
 const cronDescription = computed(() => {
-  if (!generatedCron.value) return 'No schedule configured';
-  const cfg = scheduleConfig.value;
-
-  switch (scheduleType.value) {
-    case 'hourly':
-      return `Every ${cfg.hours} hour${cfg.hours > 1 ? 's' : ''}`;
-    case 'daily':
-      return `Every day at ${cfg.time}`;
-    case 'weekly': {
-      const days = cfg.weekdays
-        .map(d => weekdays.find(w => w.value === d)?.full)
-        .join(', ');
-      return `Every ${days || 'no days selected'} at ${cfg.time}`;
-    }
-    case 'monthly':
-      return `On day ${cfg.dayOfMonth} of every month at ${cfg.time}`;
-    case 'custom':
-      return `Custom cron: ${cfg.customCron}`;
-    default:
-      return 'No schedule configured';
+  if (!generatedCron.value) return 'No schedule configured'
+  const cfg = scheduleConfig.value
+  switch(scheduleType.value){
+    case 'hourly': return `Every ${cfg.hours} hour${cfg.hours>1?'s':''}`
+    case 'daily': return `Every day at ${cfg.time}`
+    case 'weekly': return `Every ${cfg.weekdays.map(d=>weekdays.find(w=>w.value===d)?.short).join(', ')||'no days'} at ${cfg.time}`
+    case 'monthly': return `On day ${cfg.dayOfMonth} of every month at ${cfg.time}`
+    case 'custom': return `Custom cron: ${cfg.customCron}`
+    default: return 'No schedule configured'
   }
-});
+})
 
-watch(generatedCron, (newCron) => {
-  backupForm.value.schedule_cron = newCron;
-});
+watch(generatedCron, (newCron)=> backupForm.value.schedule_cron = newCron)
 
-function handleScheduleToggle() {
-  if (!isScheduled.value) backupForm.value.schedule_cron = '';
+function handleScheduleToggle(){ if(!isScheduled.value) backupForm.value.schedule_cron='' }
+function selectScheduleType(type){ scheduleType.value=type }
+function toggleWeekday(day){ const idx=scheduleConfig.value.weekdays.indexOf(day); if(idx>-1) scheduleConfig.value.weekdays.splice(idx,1); else scheduleConfig.value.weekdays.push(day) }
+function resetForm(){
+  backupForm.value={ job_name:'', rclone_mode:'COPY', source_path:'', remote_name:'', destination_path:'', schedule_cron:'', pre_script:'', post_script:'' }
+  isScheduled.value=false
+  scheduleConfig.value={ hours:1,time:'00:00',weekdays:[],dayOfMonth:1,customCron:'' }
 }
-
-function selectScheduleType(type) {
-  scheduleType.value = type;
-}
-
-function toggleWeekday(day) {
-  const days = scheduleConfig.value.weekdays;
-  const idx = days.indexOf(day);
-  if (idx > -1) days.splice(idx, 1);
-  else days.push(day);
-}
-
-function resetForm() {
-  backupForm.value = {
-    job_name: '',
-    rclone_mode: 'COPY',
-    source_path: '',
-    remote_name: '',
-    destination_path: '',
-    schedule_cron: '',
-    pre_script: '',
-    post_script: ''
-  };
-  isScheduled.value = false;
-  scheduleConfig.value = {
-    hours: 1,
-    time: '00:00',
-    weekdays: [],
-    dayOfMonth: 1,
-    customCron: ''
-  };
-}
-
-async function handleBackupSubmit() {
-  isLoading.value = true
-  message.value = null
-  errorMessage.value = null
-  try {
-    const res = await jobService.createBackupJob(backupForm.value)
-    message.value = res.message || 'Job created successfully!'
+async function handleBackupSubmit(){
+  isLoading.value=true
+  message.value=null
+  errorMessage.value=null
+  try{
+    const res=await jobService.createBackupJob(backupForm.value)
+    message.value=res.message||'Job created successfully!'
     emit('success')
-    setTimeout(() => emit('close'), 1500)
-  } catch (err) {
-    errorMessage.value = err.response?.data?.error || 'Failed to create backup job.'
-  } finally {
-    isLoading.value = false
-  }
+    setTimeout(()=>emit('close'),1500)
+  }catch(err){
+    errorMessage.value=err.response?.data?.error||'Failed to create backup job.'
+  }finally{ isLoading.value=false }
 }
-
-function close() {
-  emit('close')
-}
+function close(){ emit('close') }
 </script>
 
 <style scoped>

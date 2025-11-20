@@ -6,19 +6,42 @@
       <p class="subtitle">Overview sistem backup dan monitoring activity</p>
     </div>
 
-    <!-- Stats Cards -->
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-content">
-          <span class="stat-label">Total Remote</span>
-          <span class="stat-value">{{ totalRemotes }}</span>
+    <!-- Stats Cards with Storage Chart -->
+    <div class="stats-section">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-content">
+            <span class="stat-label">Total Remote</span>
+            <span class="stat-value">{{ totalRemotes }}</span>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-content">
+            <span class="stat-label">Total Job</span>
+            <span class="stat-value">{{ totalJobs }}</span>
+          </div>
         </div>
       </div>
 
-      <div class="stat-card">
-        <div class="stat-content">
-          <span class="stat-label">Total Job</span>
-          <span class="stat-value">{{ totalJobs }}</span>
+      <!-- Storage Chart Section -->
+      <div class="storage-card">
+        <div class="storage-header">
+          <span class="storage-label">Total Disk Space</span>
+          <span class="storage-value">{{ totalStorageGB }}GB</span>
+        </div>
+        <div class="storage-body">
+          <div class="chart-container">
+            <div v-if="isLoadingData" class="status-message">
+              <span class="loading-dot"></span> Loading...
+            </div>
+            <StorageChart
+              v-else
+              :series="storageChartSeries"
+              :labels="storageLabels"
+              :colors="storageColors"
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -49,7 +72,7 @@
 
     <!-- Next Job Section -->
     <div class="section">
-      <h2>Next Run</h2>
+      <h2>Next Scheduled Job</h2>
       
       <div v-if="isLoadingJobs" class="status-message">
         <span class="loading-dot"></span>
@@ -58,16 +81,17 @@
 
       <div v-else-if="nextJob" class="next-job-card">
         <div class="job-header">
+          <span class="job-type-badge">{{ nextJob.jobType }}</span>
           <span class="job-time">{{ formatNextRun(nextJob.nextRun) }}</span>
         </div>
         <h3>{{ nextJob.name }}</h3>
         <div class="job-details">
           <div class="detail-item">
-            <span class="detail-label">Drive Target</span>
+            <span class="detail-label">Remote</span>
             <span class="detail-value">{{ nextJob.remoteName }}</span>
           </div>
           <div class="detail-item">
-            <span class="detail-label">Time</span>
+            <span class="detail-label">Schedule</span>
             <span class="detail-value">{{ nextJob.scheduleCron }}</span>
           </div>
         </div>
@@ -99,85 +123,102 @@ import { ref, computed, onMounted } from 'vue';
 import monitoringService from '@/services/monitoringService';
 import QuickBackupModal from '@/components/CreateBackup.vue';
 import QuickRestoreModal from '@/components/CreateRestore.vue';
+import StorageChart from '@/components/StorageChart.vue';
 
 // State
 const remotes = ref([]);
 const jobs = ref([]);
+const isLoadingData = ref(true);
 const isLoadingJobs = ref(true);
 const showBackupModal = ref(false);
 const showRestoreModal = ref(false);
+const driveColors = new Map();
 
 // Computed
 const totalRemotes = computed(() => remotes.value.length);
 const totalJobs = computed(() => jobs.value.length);
 
-// Di file: Dashboard.vue <script setup>
+const totalStorageGB = computed(() => {
+  const total = remotes.value.reduce((sum, remote) => {
+    if (remote.status_connect === 'CONNECTED') {
+      return sum + (remote.total_storage_gb || 0);
+    }
+    return sum;
+  }, 0);
+  return total.toFixed(2);
+});
+
+const storageChartSeries = computed(() => {
+  const series = [];
+  remotes.value
+    .filter(remote => remote.status_connect === 'CONNECTED')
+    .forEach(remote => {
+      const used = remote.used_storage_gb || 0;
+      const total = remote.total_storage_gb || 0;
+      const free = total - used;
+      series.push(used);
+      if (free > 0) series.push(free);
+    });
+  return series;
+});
+
+const storageLabels = computed(() => {
+  const labels = [];
+  remotes.value
+    .filter(remote => remote.status_connect === 'CONNECTED')
+    .forEach(remote => {
+      labels.push(remote.remote_name);
+      const used = remote.used_storage_gb || 0;
+      const total = remote.total_storage_gb || 0;
+      const free = total - used;
+      if (free > 0) labels.push(`${remote.remote_name} (Free)`);
+    });
+  return labels;
+});
+
+const storageColors = computed(() => {
+  const colors = [];
+  remotes.value
+    .filter(remote => remote.status_connect === 'CONNECTED')
+    .forEach((remote, index) => {
+      const color = getColorForDrive(remote.remote_name, index);
+      colors.push(color);
+      const used = remote.used_storage_gb || 0;
+      const total = remote.total_storage_gb || 0;
+      const free = total - used;
+      if (free > 0) {
+        colors.push(hexToRgba(color, 0.3));
+      }
+    });
+  return colors;
+});
+
+const driveBreakdown = computed(() => {
+  return remotes.value
+    .filter(remote => remote.status_connect === 'CONNECTED')
+    .map((remote, index) => ({
+      name: remote.remote_name,
+      size: `${(remote.used_storage_gb || 0).toFixed(2)} GB / ${(remote.total_storage_gb || 0).toFixed(2)} GB`,
+      color: getColorForDrive(remote.remote_name, index)
+    }));
+});
 
 const nextJob = computed(() => {
-    // Debug: Log raw data
-    console.log('Raw jobs data:', jobs.value);
-    
-    if (!Array.isArray(jobs.value) || jobs.value.length === 0) {
-      console.log('No jobs available');
-      return null;
-    }
-    
-    const now = new Date();
-    
-    const futureJobs = jobs.value
-        .filter(j => {
-            // ✅ Menggunakan snake_case: j.next_run
-            const hasNextRun = j.next_run && j.next_run !== 'N/A' && j.next_run !== '';
-            console.log('Job:', j.job_name, 'has next_run:', hasNextRun, 'value:', j.next_run);
-            return hasNextRun;
-        })
-        .map(j => {
-            const nextRunDate = new Date(j.next_run);
-            const timeDiff = nextRunDate - now;
-            
-            console.log('Processing job:', {
-              name: j.job_name,
-              nextRun: j.next_run,
-              timeDiff: timeDiff,
-              isValid: !isNaN(nextRunDate.getTime()),
-              isFuture: timeDiff > 0
-            });
-            
-            return {
-                // ✅ MAPPING FINAL KE OBJECT YANG LEBIH CLEAN
-                name: j.job_name,
-                jobType: j.type, // Menggunakan field 'type' dari DTO
-                remoteName: j.gdrive_target, // Menggunakan field 'gdrive_target'
-                scheduleCron: j.next_run, 
-                nextRunDate: nextRunDate,
-                timeDiff: timeDiff
-            };
-        })
-        .filter(j => {
-            // ✅ Filter KRITIS: Pastikan tanggal valid dan di masa depan
-            const isValid = !isNaN(j.nextRunDate.getTime()) && j.timeDiff > 0;
-            console.log('Filter result for', j.name, ':', isValid);
-            return isValid;
-        })
-        .sort((a, b) => a.timeDiff - b.timeDiff);
-    
-    console.log('Future jobs found:', futureJobs.length);
-    if (futureJobs.length > 0) {
-        console.log('Next job selected:', futureJobs[0]);
-        // ✅ PASTIKAN RETURN OBJECT COCOK DENGAN TEMPLATE
-        const next = futureJobs[0];
-        return {
-            jobType: next.jobType,
-            nextRun: next.nextRunDate, // Mengirim objek Date ke formatNextRun
-            name: next.name,
-            remoteName: next.remoteName,
-            scheduleCron: next.scheduleCron // Mengirim cron string
-        };
-    }
-    
-    return null;
+  if (!Array.isArray(jobs.value) || jobs.value.length === 0) return null;
+  
+  const futureJobs = jobs.value
+    .map(j => ({ ...j, nextRunDate: new Date(j.next_run) }))
+    .filter(j => j.nextRunDate && j.nextRunDate > new Date())
+    .sort((a, b) => a.nextRunDate - b.nextRunDate);
+  
+  return futureJobs.length > 0 ? {
+    jobType: futureJobs[0].type,
+    nextRun: futureJobs[0].nextRunDate,
+    name: futureJobs[0].job_name,
+    remoteName: futureJobs[0].gdrive_target,
+    scheduleCron: futureJobs[0].next_run
+  } : null;
 });
-// ... (sisa code tetap sama)
 
 // Lifecycle
 onMounted(async () => {
@@ -185,7 +226,35 @@ onMounted(async () => {
 });
 
 // Functions
+const predefinedColors = [
+  '#66A5AD',
+  '#A0D468',
+  '#F68484',
+  '#B49FBC',
+  '#FDBE34',
+  '#7D9D9C',
+  '#D97F7F',
+  '#6A8EAE',
+  '#A29B7F',
+  '#CC9A78'
+];
+
+function hexToRgba(hex, alpha) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function getColorForDrive(driveName, index) {
+  if (!driveColors.has(driveName)) {
+    driveColors.set(driveName, predefinedColors[index % predefinedColors.length]);
+  }
+  return driveColors.get(driveName);
+}
+
 async function fetchData() {
+  isLoadingData.value = true;
   isLoadingJobs.value = true;
   
   try {
@@ -199,6 +268,7 @@ async function fetchData() {
   } catch (error) {
     console.error('Failed to fetch dashboard data:', error);
   } finally {
+    isLoadingData.value = false;
     isLoadingJobs.value = false;
   }
 }
@@ -275,12 +345,19 @@ h1 {
   font-weight: 400;
 }
 
+/* Stats Section */
+.stats-section {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
 /* Stats Grid */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: 1fr;
   gap: 1rem;
-  margin-bottom: 2rem;
 }
 
 .stat-card {
@@ -309,6 +386,51 @@ h1 {
   font-weight: 600;
   color: #1a1a1a;
   line-height: 1;
+}
+
+/* Storage Card */
+.storage-card {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  border: 1px solid #e5e5e5;
+}
+
+.storage-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.storage-label {
+  font-size: 0.8125rem;
+  color: #666;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.storage-value {
+  font-size: 2rem;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.storage-body {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+  align-items: center;
+}
+
+.chart-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 300px;
+  padding: 0;
 }
 
 /* Section */
@@ -352,10 +474,11 @@ h1 {
   transition: all 0.2s;
   text-align: left;
   width: 100%;
+  font-family: inherit;
 }
 
 .action-card:hover {
-  background: #fafafa;
+  background: #f5f5f5;
   border-color: #1a1a1a;
 }
 
@@ -376,6 +499,7 @@ h1 {
   font-size: 1.25rem;
   color: #666;
   transition: transform 0.2s;
+  margin-left: 1rem;
 }
 
 .action-card:hover .action-arrow {
@@ -459,6 +583,7 @@ h1 {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  justify-content: center;
 }
 
 .loading-dot {
@@ -487,6 +612,16 @@ h1 {
 }
 
 /* Responsive */
+@media (max-width: 1024px) {
+  .stats-section {
+    grid-template-columns: 1fr;
+  }
+
+  .storage-body {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 768px) {
   .dashboard-container {
     padding: 1.5rem 1rem;
@@ -494,10 +629,6 @@ h1 {
   
   h1 {
     font-size: 1.5rem;
-  }
-  
-  .stats-grid {
-    grid-template-columns: 1fr;
   }
   
   .action-cards {

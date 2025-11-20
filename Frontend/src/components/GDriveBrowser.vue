@@ -3,9 +3,18 @@
     <!-- Header -->
     <div class="browser-header">
       <h3>📁 Browse {{ remoteName }}</h3>
-      <button v-if="currentPath !== '/'" @click="goBack" class="btn-back">
-        ← Back
-      </button>
+      <div class="header-actions">
+        <button v-if="currentPath !== '/'" @click="goBack" class="btn-back">
+          ← Back
+        </button>
+        <button 
+          v-if="selectedItem" 
+          @click="confirmSelection" 
+          class="btn-select"
+        >
+          ✅ Select "{{ selectedItem.name }}"
+        </button>
+      </div>
     </div>
 
     <!-- Breadcrumb Navigation -->
@@ -27,6 +36,19 @@
           {{ segment }}
         </button>
       </template>
+    </div>
+
+    <!-- Selected Item Info -->
+    <div v-if="selectedItem" class="selected-banner">
+      <div class="selected-icon">
+        {{ selectedItem.is_dir ? '📁' : getFileIcon(selectedItem.name) }}
+      </div>
+      <div class="selected-content">
+        <strong>Selected:</strong> {{ selectedItem.name }}
+        <br>
+        <small>{{ selectedItem.is_dir ? 'Folder' : formatFileSize(selectedItem.size) }} • {{ currentPath }}</small>
+      </div>
+      <button @click="clearSelection" class="btn-clear">✕</button>
     </div>
 
     <!-- Loading State -->
@@ -52,30 +74,45 @@
       <div 
         v-for="file in files" 
         :key="file.path"
-        @click="handleFileClick(file)"
-        :class="['file-item', { 'is-dir': file.is_dir }]"
+        :class="['file-item', { 
+          'is-dir': file.is_dir,
+          'is-selected': selectedItem?.path === file.path
+        }]"
       >
-        <!-- Icon -->
-        <div class="file-icon">
-          <span v-if="file.is_dir" class="icon">📁</span>
-          <span v-else :class="getFileIcon(file.name)" class="icon">{{ getFileIcon(file.name) }}</span>
-        </div>
-
-        <!-- File Info -->
-        <div class="file-info">
-          <div class="file-name">{{ file.name }}</div>
-          <div v-if="!file.is_dir" class="file-details">
-            {{ formatFileSize(file.size) }} • {{ formatDate(file.mod_time) }}
+        <!-- Folder: Double-click to enter, Click to select -->
+        <template v-if="file.is_dir">
+          <div 
+            class="file-content"
+            @click="selectItem(file)"
+            @dblclick="navigateTo(file.path)"
+          >
+            <div class="file-icon">📁</div>
+            <div class="file-info">
+              <div class="file-name">{{ file.name }}</div>
+              <div class="file-details">
+                Folder • {{ formatDate(file.mod_time) }}
+              </div>
+            </div>
           </div>
-          <div v-else class="file-details">
-            Folder • {{ formatDate(file.mod_time) }}
-          </div>
-        </div>
+          <div class="file-badge">🗂️ Folder</div>
+        </template>
 
-        <!-- Arrow for folders -->
-        <div v-if="file.is_dir" class="file-arrow">
-          →
-        </div>
+        <!-- File: Click to select -->
+        <template v-else>
+          <div 
+            class="file-content"
+            @click="selectItem(file)"
+          >
+            <div class="file-icon">{{ getFileIcon(file.name) }}</div>
+            <div class="file-info">
+              <div class="file-name">{{ file.name }}</div>
+              <div class="file-details">
+                {{ formatFileSize(file.size) }} • {{ formatDate(file.mod_time) }}
+              </div>
+            </div>
+          </div>
+          <div class="file-badge">📄 File</div>
+        </template>
       </div>
 
       <!-- Total Size Info -->
@@ -83,6 +120,15 @@
         <p>📊 Total size: {{ formatFileSize(totalSize) }}</p>
         <p>📦 {{ files.length }} items</p>
       </div>
+    </div>
+
+    <!-- Instructions -->
+    <div class="instructions">
+      <small>
+        💡 <strong>Folder:</strong> Click to select, Double-click to open<br>
+        💡 <strong>File:</strong> Click to select<br>
+        💡 Click "Select" button to confirm your choice
+      </small>
     </div>
   </div>
 </template>
@@ -112,6 +158,7 @@ const files = ref([]);
 const isLoading = ref(false);
 const error = ref(null);
 const totalSize = ref(0);
+const selectedItem = ref(null);
 
 // Computed
 const pathSegments = computed(() => {
@@ -132,6 +179,7 @@ async function loadFiles() {
   error.value = null;
   files.value = [];
   totalSize.value = 0;
+  selectedItem.value = null;
 
   try {
     console.log(`🔄 Loading files from ${props.remoteName}:${currentPath.value}`);
@@ -159,23 +207,35 @@ async function loadFiles() {
   }
 }
 
-// Handle file/folder click
-function handleFileClick(file) {
-  if (file.is_dir) {
-    // Navigate ke folder
-    navigateTo(file.path);
-  } else {
-    // Emit select-file event untuk file
-    emit('select-file', {
-      name: file.name,
-      path: file.path,
-      size: file.size,
-      remote: props.remoteName
-    });
-  }
+// Select item (file atau folder)
+function selectItem(file) {
+  selectedItem.value = file;
+  console.log(`✅ Selected: ${file.name} (${file.is_dir ? 'Folder' : 'File'})`);
 }
 
-// Navigate ke path tertentu
+// Clear selection
+function clearSelection() {
+  selectedItem.value = null;
+}
+
+// Confirm selection dan emit ke parent
+function confirmSelection() {
+  if (!selectedItem.value) return;
+  
+  const item = selectedItem.value;
+  
+  emit('select-file', {
+    name: item.name,
+    path: item.path,
+    size: item.size,
+    is_dir: item.is_dir,
+    remote: props.remoteName
+  });
+  
+  console.log(`🎯 Confirmed selection: ${item.name}`);
+}
+
+// Navigate ke path tertentu (untuk double-click folder)
 function navigateTo(path) {
   currentPath.value = path;
   loadFiles();
@@ -207,60 +267,15 @@ function getFileIcon(fileName) {
   const ext = fileName.split('.').pop().toLowerCase();
   
   const iconMap = {
-    // Archives
-    'zip': '🗜️',
-    'rar': '🗜️',
-    '7z': '🗜️',
-    'tar': '🗜️',
-    'gz': '🗜️',
-    
-    // Documents
-    'pdf': '📄',
-    'doc': '📝',
-    'docx': '📝',
-    'txt': '📄',
-    'xlsx': '📊',
-    'csv': '📊',
-    'xls': '📊',
-    'ppt': '🎞️',
-    'pptx': '🎞️',
-    
-    // Images
-    'jpg': '🖼️',
-    'jpeg': '🖼️',
-    'png': '🖼️',
-    'gif': '🖼️',
-    'svg': '🖼️',
-    'webp': '🖼️',
-    
-    // Videos
-    'mp4': '🎬',
-    'avi': '🎬',
-    'mkv': '🎬',
-    'mov': '🎬',
-    'flv': '🎬',
-    
-    // Audio
-    'mp3': '🎵',
-    'wav': '🎵',
-    'flac': '🎵',
-    'm4a': '🎵',
-    
-    // Code
-    'js': '⚙️',
-    'py': '⚙️',
-    'go': '⚙️',
-    'java': '⚙️',
-    'cpp': '⚙️',
-    'json': '⚙️',
-    'xml': '⚙️',
-    'html': '⚙️',
-    'css': '⚙️',
-    
-    // Database
-    'sql': '🗄️',
-    'db': '🗄️',
-    'sqlite': '🗄️',
+    'zip': '🗜️', 'rar': '🗜️', '7z': '🗜️', 'tar': '🗜️', 'gz': '🗜️',
+    'pdf': '📄', 'doc': '📝', 'docx': '📝', 'txt': '📄', 
+    'xlsx': '📊', 'csv': '📊', 'xls': '📊', 'ppt': '🎞️', 'pptx': '🎞️',
+    'jpg': '🖼️', 'jpeg': '🖼️', 'png': '🖼️', 'gif': '🖼️', 'svg': '🖼️', 'webp': '🖼️',
+    'mp4': '🎬', 'avi': '🎬', 'mkv': '🎬', 'mov': '🎬', 'flv': '🎬',
+    'mp3': '🎵', 'wav': '🎵', 'flac': '🎵', 'm4a': '🎵',
+    'js': '⚙️', 'py': '⚙️', 'go': '⚙️', 'java': '⚙️', 'cpp': '⚙️', 
+    'json': '⚙️', 'xml': '⚙️', 'html': '⚙️', 'css': '⚙️',
+    'sql': '🗄️', 'db': '🗄️', 'sqlite': '🗄️',
   };
   
   return iconMap[ext] || '📄';
@@ -268,7 +283,7 @@ function getFileIcon(fileName) {
 
 // Format file size ke human readable
 function formatFileSize(bytes) {
-  if (bytes === 0) return '0 B';
+  if (!bytes || bytes === 0) return '0 B';
   
   const k = 1024;
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -314,6 +329,7 @@ onMounted(() => {
   max-height: 600px;
   display: flex;
   flex-direction: column;
+  gap: 1rem;
 }
 
 /* Header */
@@ -321,7 +337,6 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
   padding-bottom: 1rem;
   border-bottom: 2px solid #f0f0f0;
 }
@@ -333,15 +348,25 @@ onMounted(() => {
   color: #1a1a1a;
 }
 
-.btn-back {
-  background: #f5f5f5;
-  border: 1px solid #e5e5e5;
+.header-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-back,
+.btn-select {
   padding: 0.5rem 1rem;
   border-radius: 6px;
   cursor: pointer;
   font-size: 0.875rem;
   font-weight: 500;
   transition: all 0.2s;
+  border: 1px solid #e5e5e5;
+}
+
+.btn-back {
+  background: #f5f5f5;
+  color: #666;
 }
 
 .btn-back:hover {
@@ -349,12 +374,61 @@ onMounted(() => {
   border-color: #d4d4d4;
 }
 
+.btn-select {
+  background: #22c55e;
+  color: white;
+  border: none;
+}
+
+.btn-select:hover {
+  background: #16a34a;
+}
+
+/* Selected Banner */
+.selected-banner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+  border-radius: 6px;
+}
+
+.selected-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.selected-content {
+  flex: 1;
+  font-size: 0.875rem;
+  color: #166534;
+}
+
+.selected-content strong {
+  color: #15803d;
+}
+
+.btn-clear {
+  background: transparent;
+  border: none;
+  color: #166534;
+  cursor: pointer;
+  font-size: 1.25rem;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.btn-clear:hover {
+  color: #15803d;
+}
+
 /* Breadcrumb */
 .breadcrumb {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin-bottom: 1rem;
   overflow-x: auto;
   padding: 0.5rem 0;
   font-size: 0.875rem;
@@ -409,12 +483,6 @@ onMounted(() => {
   to { transform: rotate(360deg); }
 }
 
-.loading p {
-  margin: 0;
-  color: #666;
-  font-size: 0.9375rem;
-}
-
 /* Error */
 .error-message {
   background: #fee2e2;
@@ -423,11 +491,6 @@ onMounted(() => {
   padding: 1rem;
   border-radius: 6px;
   text-align: center;
-}
-
-.error-message p {
-  margin: 0 0 0.5rem 0;
-  font-weight: 500;
 }
 
 .btn-retry {
@@ -439,10 +502,7 @@ onMounted(() => {
   cursor: pointer;
   font-size: 0.875rem;
   font-weight: 500;
-}
-
-.btn-retry:hover {
-  background: #7f1d1d;
+  margin-top: 0.5rem;
 }
 
 /* Empty State */
@@ -468,17 +528,9 @@ onMounted(() => {
   width: 6px;
 }
 
-.files-container::-webkit-scrollbar-track {
-  background: transparent;
-}
-
 .files-container::-webkit-scrollbar-thumb {
   background: #d4d4d4;
   border-radius: 3px;
-}
-
-.files-container::-webkit-scrollbar-thumb:hover {
-  background: #999;
 }
 
 /* File Item */
@@ -487,10 +539,11 @@ onMounted(() => {
   align-items: center;
   gap: 1rem;
   padding: 0.75rem;
-  border: 1px solid #f0f0f0;
+  border: 2px solid #f0f0f0;
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
+  background: #fff;
 }
 
 .file-item:hover {
@@ -498,22 +551,26 @@ onMounted(() => {
   border-color: #e5e5e5;
 }
 
-.file-item.is-dir {
-  background: #f9fafb;
+.file-item.is-selected {
+  background: #f0fdf4;
+  border-color: #86efac;
 }
 
 .file-item.is-dir:hover {
-  background: #f0f0f0;
   border-color: #3b82f6;
+}
+
+.file-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
 }
 
 .file-icon {
   font-size: 1.5rem;
   flex-shrink: 0;
-}
-
-.icon {
-  display: block;
 }
 
 .file-info {
@@ -536,24 +593,40 @@ onMounted(() => {
   margin-top: 0.25rem;
 }
 
-.file-arrow {
-  color: #3b82f6;
-  font-size: 1.25rem;
-  font-weight: bold;
+.file-badge {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  background: #f0f0f0;
+  border-radius: 4px;
+  color: #666;
   flex-shrink: 0;
+  white-space: nowrap;
 }
 
 /* Total Info */
 .total-info {
   padding: 1rem 0;
   border-top: 1px solid #f0f0f0;
-  margin-top: auto;
   font-size: 0.8125rem;
   color: #666;
 }
 
 .total-info p {
   margin: 0.25rem 0;
+}
+
+/* Instructions */
+.instructions {
+  background: #f0f8ff;
+  border: 1px solid #b3d9ff;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  font-size: 0.75rem;
+  color: #0c4a6e;
+}
+
+.instructions small {
+  line-height: 1.6;
 }
 
 /* Responsive */
@@ -569,12 +642,18 @@ onMounted(() => {
     gap: 0.5rem;
   }
 
-  .breadcrumb {
-    font-size: 0.8125rem;
+  .header-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .btn-back,
+  .btn-select {
+    width: 100%;
   }
 
   .file-item {
-    gap: 0.75rem;
+    gap: 0.5rem;
   }
 }
 </style>
