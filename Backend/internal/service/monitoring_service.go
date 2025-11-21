@@ -5,31 +5,29 @@ import (
 	"fmt"
 	"gbackup-new/backend/internal/models"
 	"gbackup-new/backend/internal/repository"
-	"strings" // Diperlukan untuk parsing output listremotes
+	"strings"
 	"time"
 )
 
-// MonitoringService interface (Kontrak)
 type MonitoringService interface {
 	UpdateRemoteStatus(remoteName string) error
 	GetRemoteStatusList() ([]models.Monitoring, error)
-	GetRcloneConfiguredRemotes() ([]string, error) // Untuk Startup Discovery
+	GetRcloneConfiguredRemotes() ([]string, error)
 	GetJobLogs() ([]models.Log, error)
-	DiscoverAndSaveRemote() error // Untuk UI Logs\
-	startMonitoringDaemon()
+	DiscoverAndSaveRemote() error
 	RunRemoteChecks() error
+	StartMonitoringDaemon()
+	SyncRemotesWithRclone() error
 }
 
-// monitoringServiceImpl adalah struct implementasi
 type monitoringServiceImpl struct {
 	MonitorRepo repository.MonitoringRepository
-	LogRepo     repository.LogRepository // Dependency untuk GetJobLogs
+	LogRepo     repository.LogRepository
 	JobRepo     repository.JobRepository
 }
 
-const intervalCek = 30 * time.Minute
+const intervalCek = 5 * time.Minute
 
-// NewMonitoringService adalah constructor untuk DI
 func NewMonitoringService(mRepo repository.MonitoringRepository, lRepo repository.LogRepository, jRepo repository.JobRepository) MonitoringService {
 	return &monitoringServiceImpl{
 		MonitorRepo: mRepo,
@@ -38,16 +36,10 @@ func NewMonitoringService(mRepo repository.MonitoringRepository, lRepo repositor
 	}
 }
 
-// ----------------------------------------------------
-// FUNGSI IMPLEMENTASI
-// ----------------------------------------------------
-
-// UpdateRemoteStatus: Menggunakan Executor untuk memperbarui status remote
 func (s *monitoringServiceImpl) UpdateRemoteStatus(remoteName string) error {
-	// 1. Generate command
-	rcloneArgs := []string{"rclone", "about", remoteName + ":", "--json"}
+	fmt.Printf("[Monitoring] Mengecek remote: %s\n", remoteName)
 
-	// 2. Eksekusi command Rclone (menggunakan Executor)
+	rcloneArgs := []string{"rclone", "about", remoteName + ":", "--json"}
 	result := ExecuteCliJob(rcloneArgs)
 
 	monitor := &models.Monitoring{
@@ -57,39 +49,37 @@ func (s *monitoringServiceImpl) UpdateRemoteStatus(remoteName string) error {
 
 	count, errJob := s.JobRepo.CountJobOnRemote(remoteName)
 	if errJob != nil {
-		fmt.Printf("gagal menghitung job pada remote %s: %v\n", remoteName, errJob)
+		fmt.Printf("⚠️ Gagal hitung job pada %s: %v\n", remoteName, errJob)
 		monitor.ActiveJobCount = 0
 	} else {
 		monitor.ActiveJobCount = count
 	}
 
+	// Di dalam UpdateRemoteStatus (blok if !result.Success)
+
 	if !result.Success {
-		// --- LOGIKA KEGAGALAN KONEKSI ---
+		fmt.Printf("❌ Rclone Error pada %s: %s\n", remoteName, result.ErrorMsg)
 		monitor.StatusConnect = "DISCONNECTED"
-		s.MonitorRepo.UpsertRemoteStatus(monitor) // Tetap update DB (status DISCONNECTED)
 
-		// Opsional: Catat error sistem ini ke tabel logs
-		// s.LogRepo.CreateLog(...)
+		// PERBAIKAN: Hapus '&' agar tipenya string (value), bukan *string (pointer)
+		monitor.SystemMessage = result.ErrorMsg
 
+		s.MonitorRepo.UpsertRemoteStatus(monitor)
 		return fmt.Errorf("gagal terhubung ke %s: %s", remoteName, result.ErrorMsg)
 	}
 
-	// --- LOGIKA SUKSES ---
-
-	// Struct Golang untuk Parsing Output JSON Rclone
 	var rcloneData struct {
 		Total uint64 `json:"total"`
 		Used  uint64 `json:"used"`
 		Free  uint64 `json:"free"`
 	}
 
-	// 3. Parsing Output JSON
 	if err := json.Unmarshal([]byte(result.Output), &rcloneData); err != nil {
-		return fmt.Errorf("gagal parsing JSON output Rclone: %v", err)
+		fmt.Printf("❌ JSON Parse Error: %v\n", err)
+		return fmt.Errorf("gagal parsing JSON: %v", err)
 	}
 
-	// 4. Konversi Data (Bytes ke GB)
-	const BytesToGB = 1073741824.0 // 1024^3
+	const BytesToGB = 1073741824.0
 
 	monitor.StatusConnect = "CONNECTED"
 	monitor.TotalStorageGB = float64(rcloneData.Total) / BytesToGB
@@ -99,18 +89,19 @@ func (s *monitoringServiceImpl) UpdateRemoteStatus(remoteName string) error {
 	usedPercentage := (monitor.UsedStorageGB / monitor.TotalStorageGB) * 100
 	const WarningThreshold = 85.0
 
-	// Early warn
 	if usedPercentage >= WarningThreshold {
-		monitor.SystemMessage = fmt.Sprintf("PERINGATAN: Storage terisi %.1f%%. Ruang kritis!", usedPercentage)
-	} else if monitor.SystemMessage != "" {
+		msg := fmt.Sprintf("⚠️ Storage terisi %.1f%%. PERINGATAN!", usedPercentage)
+		monitor.SystemMessage = msg
+	} else {
 		monitor.SystemMessage = ""
-
 	}
-	// 5. Update Database (melalui Repository Upsert)
+
+	fmt.Printf("✅ %s: %.2f GB / %.2f GB (%.1f%%)\n",
+		remoteName, monitor.UsedStorageGB, monitor.TotalStorageGB, usedPercentage)
+
 	return s.MonitorRepo.UpsertRemoteStatus(monitor)
 }
 
-// GetRemoteStatusList: Mengambil data status dari DB untuk UI
 func (s *monitoringServiceImpl) GetRemoteStatusList() ([]models.Monitoring, error) {
 	remotes, err := s.MonitorRepo.FindAllRemotes()
 	if err != nil {
@@ -125,12 +116,11 @@ func (s *monitoringServiceImpl) GetRemoteStatusList() ([]models.Monitoring, erro
 	return remotes, nil
 }
 
-// GetRcloneConfiguredRemotes: Mengambil daftar remote dari rclone.conf (Untuk Startup Discovery)
 func (s *monitoringServiceImpl) GetRcloneConfiguredRemotes() ([]string, error) {
 	result := ExecuteCliJob([]string{"rclone", "listremotes"})
 
 	if !result.Success {
-		return nil, fmt.Errorf("gagal mendapatkan daftar remote dari rclone.conf: %s", result.ErrorMsg)
+		return nil, fmt.Errorf("gagal mendapatkan daftar remote: %s", result.ErrorMsg)
 	}
 
 	remotes := strings.Split(result.Output, "\n")
@@ -139,40 +129,150 @@ func (s *monitoringServiceImpl) GetRcloneConfiguredRemotes() ([]string, error) {
 	for _, remote := range remotes {
 		name := strings.TrimSpace(remote)
 		if len(name) > 0 && strings.HasSuffix(name, ":") {
-			cleanNames = append(cleanNames, name[:len(name)-1]) // Hapus titik dua
+			cleanNames = append(cleanNames, name[:len(name)-1])
 		}
 	}
 	return cleanNames, nil
 }
 
-// GetJobLogs: Mengambil riwayat log dari LogRepository
 func (s *monitoringServiceImpl) GetJobLogs() ([]models.Log, error) {
 	return s.LogRepo.FindAllLogs()
 }
 
-func (s *monitoringServiceImpl) DiscoverAndSaveRemote() error {
-	remoteNames, err := s.GetRcloneConfiguredRemotes()
+func (s *monitoringServiceImpl) SyncRemotesWithRclone() error {
+	fmt.Println("\n" + strings.Repeat("=", 60))
+	fmt.Println("[SYNC] Memulai sinkronisasi remote DB dengan rclone.conf")
+	fmt.Println(strings.Repeat("=", 60))
+
+	// 1. Ambil remote dari rclone.conf
+	fmt.Println("[SYNC] 1. Mengambil daftar remote dari rclone.conf...")
+	rcloneRemotes, err := s.GetRcloneConfiguredRemotes()
 	if err != nil {
-		return fmt.Errorf("gagal mengambil remote")
+		fmt.Printf("[ERROR] Gagal mengambil remote dari rclone: %v\n", err)
+		return fmt.Errorf("gagal mengambil remote dari rclone: %w", err)
+	}
+	fmt.Printf("[SYNC] ✓ Ditemukan %d remote di rclone.conf: %v\n", len(rcloneRemotes), rcloneRemotes)
+
+	// 2. Ambil remote yang ada di database
+	fmt.Println("[SYNC] 2. Mengambil daftar remote dari database...")
+	dbRemotes, err := s.MonitorRepo.GetAllRemoteNames()
+	if err != nil {
+		fmt.Printf("[ERROR] Gagal mengambil remote dari DB: %v\n", err)
+		return fmt.Errorf("gagal mengambil remote dari DB: %w", err)
+	}
+	fmt.Printf("[SYNC] ✓ Ditemukan %d remote di database: %v\n", len(dbRemotes), dbRemotes)
+
+	// 3. Cari remote yang dihapus dari rclone tapi masih ada di DB
+	fmt.Println("[SYNC] 3. Mencari remote yang dihapus dari rclone...")
+	remoteToDelete := findMissingRemotes(dbRemotes, rcloneRemotes)
+
+	if len(remoteToDelete) > 0 {
+		fmt.Printf("[SYNC] ⚠️ Ditemukan %d remote yang sudah dihapus dari rclone: %v\n", len(remoteToDelete), remoteToDelete)
+
+		for _, remoteName := range remoteToDelete {
+			fmt.Printf("[SYNC] → Menghapus '%s' dari database...\n", remoteName)
+			if err := s.MonitorRepo.DeleteRemoteByName(remoteName); err != nil {
+				fmt.Printf("[ERROR] Gagal menghapus '%s': %v\n", remoteName, err)
+			} else {
+				fmt.Printf("[SYNC] ✓ Berhasil menghapus '%s'\n", remoteName)
+			}
+		}
+	} else {
+		fmt.Println("[SYNC] ✓ Tidak ada remote yang perlu dihapus")
 	}
 
-	for _, name := range remoteNames {
-		monitor := &models.Monitoring{
-			RemoteName:    name,
-			StatusConnect: "DISCONNECTED",
-			LastCheckedAt: time.Now(),
+	// 4. Cari remote baru dari rclone yang belum di DB
+	fmt.Println("[SYNC] 4. Mencari remote baru dari rclone...")
+	remoteToAdd := findMissingRemotes(rcloneRemotes, dbRemotes)
+
+	if len(remoteToAdd) > 0 {
+		fmt.Printf("[SYNC] ℹ️ Ditemukan %d remote baru dari rclone: %v\n", len(remoteToAdd), remoteToAdd)
+
+		for _, remoteName := range remoteToAdd {
+			fmt.Printf("[SYNC] → Menambahkan '%s' ke database...\n", remoteName)
+			monitor := &models.Monitoring{
+				RemoteName:    remoteName,
+				StatusConnect: "DISCONNECTED",
+				LastCheckedAt: time.Now(),
+			}
+			if err := s.MonitorRepo.UpsertRemoteStatus(monitor); err != nil {
+				fmt.Printf("[ERROR] Gagal menambah '%s': %v\n", remoteName, err)
+			} else {
+				fmt.Printf("[SYNC] ✓ Berhasil menambahkan '%s'\n", remoteName)
+			}
+		}
+	} else {
+		fmt.Println("[SYNC] ✓ Tidak ada remote baru")
+	}
+
+	if len(remoteToDelete) == 0 && len(remoteToAdd) == 0 {
+		fmt.Println("[SYNC] ✅ Remote DB sudah sesuai dengan rclone.conf")
+	}
+
+	fmt.Println(strings.Repeat("=", 60) + "\n")
+	return nil
+}
+
+func (s *monitoringServiceImpl) DiscoverAndSaveRemote() error {
+	fmt.Println("[Discovery] Menyelaraskan remote dari rclone.conf...")
+
+	if err := s.SyncRemotesWithRclone(); err != nil {
+		return fmt.Errorf("gagal sync remote: %w", err)
+	}
+
+	remotes, err := s.MonitorRepo.FindAllRemotes()
+	if err != nil {
+		return fmt.Errorf("gagal mengambil remote dari DB: %w", err)
+	}
+
+	if len(remotes) == 0 {
+		fmt.Println("[Discovery] ⚠️ Tidak ada remote yang dikonfigurasi")
+		return nil
+	}
+
+	fmt.Printf("[Discovery] Memulai update status untuk %d remote...\n", len(remotes))
+
+	for _, remote := range remotes {
+		go s.UpdateRemoteStatus(remote.RemoteName)
+	}
+
+	return nil
+}
+
+func (s *monitoringServiceImpl) StartMonitoringDaemon() {
+	go func() {
+		fmt.Printf("[Daemon] Monitoring Daemon aktif, pengecekan tiap %v\n", intervalCek)
+
+		if err := s.RunRemoteChecks(); err != nil {
+			fmt.Printf("⚠️ Initial check error: %v\n", err)
 		}
 
-		if err := s.MonitorRepo.UpsertRemoteStatus(monitor); err != nil {
-			return fmt.Errorf("gagal menyimpan remote %s ke DB: %w", name, err)
+		if err := s.SyncRemotesWithRclone(); err != nil {
+			fmt.Printf("❌ ERROR: Gagal sync remote: %v\n", err)
+			return
 		}
+
+		ticker := time.NewTicker(intervalCek)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			fmt.Println("[Daemon] Menjalankan remote check...")
+			if err := s.RunRemoteChecks(); err != nil {
+				fmt.Printf("⚠️ Daemon Error: %v\n", err)
+			}
+		}
+	}()
+}
+
+func (s *monitoringServiceImpl) RunRemoteChecks() error {
+	remotes, err := s.MonitorRepo.FindAllRemotes()
+	if err != nil {
+		return err
 	}
 
-	for _, name := range remoteNames {
-		// Jalankan di Goroutine agar tidak memblokir startup
-		go s.UpdateRemoteStatus(name)
+	for _, remote := range remotes {
+		go s.UpdateRemoteStatus(remote.RemoteName)
 	}
-	fmt.Printf("[MONITORING] Berhasil menemukan dan menyimpan %d remote.\n", len(remoteNames))
 	return nil
 }
 
@@ -180,27 +280,19 @@ func (s *monitoringServiceImpl) FindByRemoteName(remoteName string) (*models.Mon
 	return s.MonitorRepo.FindRemoteByName(remoteName)
 }
 
-func (r *monitoringServiceImpl) RunRemoteChecks() error {
-	remotes, err := r.MonitorRepo.FindAllRemotes()
-	if err != nil {
-		return err
+func findMissingRemotes(sourceList, targetList []string) []string {
+	missing := []string{}
+
+	targetMap := make(map[string]bool)
+	for _, item := range targetList {
+		targetMap[item] = true
 	}
 
-	for _, remote := range remotes {
-		// Jalankan UpdateRemoteStatus di goroutine agar pengecekan Rclone berjalan paralel
-		go r.UpdateRemoteStatus(remote.RemoteName)
-	}
-	return nil
-}
-
-func (r *monitoringServiceImpl) startMonitoringDaemon() {
-	go func() {
-		fmt.Printf("Monitoring Daemon aktif, pengecekan tiap %s\n", intervalCek)
-		for {
-			if err := r.RunRemoteChecks(); err != nil {
-				fmt.Printf("⚠️ Daemon Error: %v\n", err)
-			}
-			time.Sleep(intervalCek)
+	for _, item := range sourceList {
+		if !targetMap[item] {
+			missing = append(missing, item)
 		}
-	}()
+	}
+
+	return missing
 }

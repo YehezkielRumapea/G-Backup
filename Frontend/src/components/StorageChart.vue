@@ -1,31 +1,22 @@
 <template>
   <div class="chart-wrapper">
-    <div class="donut-container">
-      <apexchart
-        type="donut"
-        height="300"
-        :options="donutOptions"
-        :series="donutSeries"
-      ></apexchart>
-      <div class="center-stats">
-        <div class="stat-item">
-          <span class="stat-label">Used</span>
-          <span class="stat-value">{{ totalUsedFormatted }}</span>
-        </div>
-        <div class="divider"></div>
-        <div class="stat-item">
-          <span class="stat-label">Free</span>
-          <span class="stat-value">{{ totalFreeFormatted }}</span>
-        </div>
+    <div class="chart-section">
+      <div class="radial-container">
+        <apexchart
+          type="radialBar"
+          height="350"
+          :options="radialOptions"
+          :series="radialSeries"
+        ></apexchart>
       </div>
     </div>
 
-    <div class="legend-container">
+    <div class="legend-section">
       <div v-for="(item, index) in driveLegends" :key="index" class="legend-item">
         <span class="legend-dot" :style="{ backgroundColor: item.color }"></span>
-        <div class="legend-text">
+        <div class="legend-info">
           <span class="legend-name">{{ item.name }}</span>
-          <span class="legend-size">{{ item.used }}</span>
+          <span class="legend-size">{{ item.used }} / {{ item.total }}</span>
         </div>
       </div>
     </div>
@@ -63,47 +54,56 @@ const totalFree = computed(() => {
   return totalCapacity.value - totalUsed.value;
 });
 
-const totalUsedFormatted = computed(() => {
-  return formatSize(totalUsed.value);
-});
-
-const totalFreeFormatted = computed(() => {
-  return formatSize(totalFree.value);
-});
-
-// Donut series: [used segments] + [total free]
-const donutSeries = computed(() => {
+// Radial bar series dengan percentage
+const radialSeries = computed(() => {
   const series = [];
+  
+  // Add setiap drive
   props.labels.forEach((label, index) => {
     if (!label.includes("(Free)")) {
-      series.push(props.series[index]);
+      const used = props.series[index];
+      const freeIndex = props.labels.indexOf(label + " (Free)");
+      const free = freeIndex !== -1 ? props.series[freeIndex] : 0;
+      const total = used + free;
+      const percentage = total > 0 ? Math.round((used / total) * 100) : 0;
+      series.push(percentage);
     }
   });
-  series.push(totalFree.value);
+  
+  // Add free space dari total capacity
+  if (totalCapacity.value > 0) {
+    const freePercentage = Math.round((totalFree.value / totalCapacity.value) * 100);
+    series.push(freePercentage);
+  }
+  
   return series;
 });
 
-// Donut labels
-const donutLabels = computed(() => {
+// Radial labels
+const radialLabels = computed(() => {
   const labels = [];
+  
   props.labels.forEach((label, index) => {
     if (!label.includes("(Free)")) {
       labels.push(label);
     }
   });
+  
   labels.push("Free Space");
   return labels;
 });
 
-// Donut colors
-const donutColors = computed(() => {
+// Radial colors
+const radialColors = computed(() => {
   const colors = [];
+  
   props.labels.forEach((label, index) => {
     if (!label.includes("(Free)")) {
       colors.push(props.colors[index]);
     }
   });
-  colors.push("#e8e8e8");
+  
+  colors.push("#d3d3d3");
   return colors;
 });
 
@@ -112,13 +112,27 @@ const driveLegends = computed(() => {
   const legends = [];
   props.labels.forEach((label, index) => {
     if (!label.includes("(Free)")) {
+      const used = props.series[index];
+      const freeIndex = props.labels.indexOf(label + " (Free)");
+      const free = freeIndex !== -1 ? props.series[freeIndex] : 0;
+      
       legends.push({
         name: label,
-        used: formatSize(props.series[index]),
+        used: formatSize(used),
+        total: formatSize(used + free),
         color: props.colors[index]
       });
     }
   });
+  
+  // Add free space
+  legends.push({
+    name: "Free Space",
+    used: formatSize(totalFree.value),
+    total: formatSize(totalCapacity.value),
+    color: "#d3d3d3"
+  });
+  
   return legends;
 });
 
@@ -129,14 +143,14 @@ function formatSize(bytes) {
   return bytes.toFixed(2) + " GB";
 }
 
-const donutOptions = computed(() => ({
+const radialOptions = computed(() => ({
   chart: {
-    type: "donut",
+    type: "radialBar",
     foreColor: "#1a1a1a",
     toolbar: { show: false },
     animations: {
       enabled: true,
-      speed: 900,
+      speed: 800,
       animateGradually: {
         enabled: true,
         delay: 150
@@ -144,30 +158,44 @@ const donutOptions = computed(() => ({
     }
   },
 
-  labels: donutLabels.value,
-  colors: donutColors.value,
-
-  legend: {
-    show: false
-  },
-
-  stroke: {
-    width: 2.5,
-    colors: ["#ffffff"]
-  },
+  labels: radialLabels.value,
+  colors: radialColors.value,
 
   plotOptions: {
-    pie: {
-      donut: {
-        size: "68%",
-        labels: {
-          show: false
-        }
+    radialBar: {
+      size: undefined,
+      inverseOrder: false,
+      hollow: {
+        margin: 5,
+        size: "30%",
+        background: "transparent",
+        image: undefined
       },
-      expandOnClick: false,
+      track: {
+        show: true,
+        background: "#f5f5f5",
+        strokeWidth: "95%",
+        opacity: 1,
+        margin: 8
+      },
       dataLabels: {
-        offset: 40,
-        minAngleToShowLabel: 5
+        name: {
+          show: true,
+          fontSize: "12px",
+          fontWeight: 500,
+          color: "#1a1a1a",
+          offsetY: -10
+        },
+        value: {
+          show: true,
+          fontSize: "14px",
+          fontWeight: "bold",
+          color: "#1a1a1a",
+          offsetY: 5,
+          formatter: function(val) {
+            return Math.round(val) + "%";
+          }
+        }
       }
     }
   },
@@ -181,42 +209,20 @@ const donutOptions = computed(() => ({
     }
   },
 
-  dataLabels: {
-    enabled: true,
-    formatter: (val, opts) => {
-      const label = donutLabels.value[opts.seriesIndex];
-      const size = donutSeries.value[opts.seriesIndex];
-      
-      const total = donutSeries.value.reduce((a, b) => a + b, 0);
-      const percentage = ((size / total) * 100).toFixed(0);
-      
-      let formattedSize;
-      if (size >= 1024) {
-        formattedSize = (size / 1024).toFixed(2) + " TB";
-      } else {
-        formattedSize = size.toFixed(2) + " GB";
-      }
-      
-      return label + "\n" + formattedSize + " (" + percentage + "%)";
-    },
-    style: {
-      fontSize: "12px",
-      fontWeight: "600",
-      colors: ["#1a1a1a"]
-    },
-    dropShadow: {
-      enabled: false
-    },
-    connectorColor: "#999",
-    connectorPadding: 6
+  stroke: {
+    lineCap: "round"
+  },
+
+  legend: {
+    show: false
   },
 
   tooltip: {
     enabled: true,
     theme: "light",
     y: {
-      formatter: (v) => {
-        return formatSize(v);
+      formatter: function(val) {
+        return Math.round(val) + "%";
       }
     }
   }
@@ -229,66 +235,33 @@ const donutOptions = computed(() => ({
   height: 100%;
   display: flex;
   align-items: center;
-  gap: 10rem;
+  justify-content: space-between;
+  gap: 2rem;
   padding: 0;
-  font-size: 100px;
 }
 
-.donut-container {
-  position: relative;
-  height: 300px;
+.chart-section {
+  flex: 1;
   display: flex;
   justify-content: center;
   align-items: center;
 }
 
-.center-stats {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 10;
+.radial-container {
+  width: 100%;
+  height: 350px;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-}
-
-.stat-item {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
+  justify-content: center;
   align-items: center;
 }
 
-.stat-label {
-  font-size: 0.75rem;
-  color: #999;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.stat-value {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #1a1a1a;
-  line-height: 1;
-}
-
-.divider {
-  width: 30px;
-  height: 1px;
-  background: #e5e5e5;
-}
-
-/* Legend Container */
-.legend-container {
+/* Legend Section */
+.legend-section {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  max-height: 300px;
+  gap: 0.8rem;
+  max-height: 350px;
   overflow-y: auto;
   padding-right: 0.5rem;
 }
@@ -297,6 +270,13 @@ const donutOptions = computed(() => ({
   display: flex;
   align-items: flex-start;
   gap: 0.75rem;
+  padding: 0.5rem;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.legend-item:hover {
+  background-color: #f5f5f5;
 }
 
 .legend-dot {
@@ -304,11 +284,11 @@ const donutOptions = computed(() => ({
   height: 14px;
   border-radius: 50%;
   flex-shrink: 0;
-  margin-top: 0.15rem;
+  margin-top: 0.25rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-.legend-text {
+.legend-info {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
@@ -316,10 +296,11 @@ const donutOptions = computed(() => ({
 }
 
 .legend-name {
-  font-size: 1.050rem;
-  font-weight: 500;
+  font-size: 0.85rem;
+  font-weight: 600;
   color: #1a1a1a;
-  word-break: break-word;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .legend-size {
@@ -330,20 +311,20 @@ const donutOptions = computed(() => ({
 }
 
 /* Scrollbar */
-.legend-container::-webkit-scrollbar {
+.legend-section::-webkit-scrollbar {
   width: 4px;
 }
 
-.legend-container::-webkit-scrollbar-track {
+.legend-section::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.legend-container::-webkit-scrollbar-thumb {
+.legend-section::-webkit-scrollbar-thumb {
   background: #d0d0d0;
   border-radius: 2px;
 }
 
-.legend-container::-webkit-scrollbar-thumb:hover {
+.legend-section::-webkit-scrollbar-thumb:hover {
   background: #999;
 }
 
@@ -354,19 +335,18 @@ const donutOptions = computed(() => ({
     gap: 1.5rem;
   }
 
-  .donut-container {
-    height: 280px;
+  .radial-container {
+    height: 300px;
   }
 
-  .legend-container {
+  .legend-section {
     max-height: 200px;
     flex-direction: row;
     flex-wrap: wrap;
-    gap: 0.75rem;
   }
 
   .legend-item {
-    flex: 0 0 calc(50% - 0.375rem);
+    flex: 0 0 calc(50% - 0.4rem);
   }
 }
 
@@ -375,15 +355,11 @@ const donutOptions = computed(() => ({
     gap: 1rem;
   }
 
-  .donut-container {
+  .radial-container {
     height: 250px;
   }
 
-  .stat-value {
-    font-size: 1.25rem;
-  }
-
-  .legend-container {
+  .legend-section {
     max-height: 150px;
     gap: 0.5rem;
   }

@@ -3,7 +3,7 @@
     <div class="header">
       <div>
         <h1>Manual Jobs</h1>
-        <p class="subtitle">Menjalankan Job (Backup/Restore) yang telah disimpan tanpa jadwal</p>
+        <p class="subtitle">Menjalankan Job Tanpa Jadwal yang telah disimpan</p>
       </div>
     </div>
     
@@ -45,7 +45,7 @@
           <tr>
             <th>Nama Job</th>
             <th>Object</th>
-            <th>Target GDrive</th>
+            <th>GDrive</th>
             <th>Last Run</th>
             <th>Status</th>
             <th>Action</th>
@@ -240,7 +240,7 @@ function getToastClass(type) {
 .header h1 {
   margin: 0 0 0.5rem 0;
   font-size: 1.875rem;
-  font-weight: 700;
+  font-weight: bold;
   color: #1a1a1a;
 }
 
@@ -349,7 +349,7 @@ function getToastClass(type) {
 .jobs-table th {
   padding: 1rem;
   text-align: left;
-  font-weight: 600;
+  font-weight: bold;
   font-size: 0.875rem;
   color: #1a1a1a;
   text-transform: uppercase;

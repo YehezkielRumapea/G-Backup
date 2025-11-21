@@ -16,6 +16,7 @@ type JobMonitoringDTO struct {
 	ID           uint   `json:"id"`
 	JobName      string `json:"job_name"`
 	Type         string `json:"type"`
+	SourcePath   string `json:"source_path"`
 	GdriveTarget string `json:"gdrive_target"`
 	Mode         string `json:"mode"`
 	LastRun      string `json:"last_run"`
@@ -187,6 +188,7 @@ func (s *schedulerServiceImpl) GetScheduledJobsInfo() ([]JobMonitoringDTO, error
 			ID:           job.ID,
 			JobName:      job.JobName,
 			Type:         jobTypeFormatted,
+			SourcePath:   job.SourcePath,
 			GdriveTarget: job.RemoteName,
 			Mode:         mode,
 			LastRun:      lastRunStr,
@@ -252,6 +254,7 @@ func (s *schedulerServiceImpl) GetManualJob() ([]JobMonitoringDTO, error) {
 			ID:           job.ID,
 			JobName:      job.JobName,
 			Type:         jobTypeFormatted,
+			SourcePath:   job.SourcePath,
 			GdriveTarget: job.RemoteName,
 			Mode:         mode,
 			LastRun:      lastRunstr,

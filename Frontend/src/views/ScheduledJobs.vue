@@ -45,7 +45,7 @@
           <tr>
             <th>Nama Job</th>
             <th>Object</th>
-            <th>Target GDrive</th>
+            <th>GDrive</th>
             <th>Last Run</th>
             <th>Status</th>
             <th>Next Run</th>
@@ -242,7 +242,7 @@ function getToastClass(type) {
 
 h1 {
   font-size: 1.75rem;
-  font-weight: 600;
+  font-weight: bold;
   color: #1a1a1a;
   margin: 0 0 0.5rem 0;
   letter-spacing: -0.02em;
@@ -484,6 +484,7 @@ h1 {
   
   h1 {
     font-size: 1.5rem;
+    font-weight: bold;
   }
   
   .btn-add {

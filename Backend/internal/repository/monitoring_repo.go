@@ -3,58 +3,47 @@ package repository
 import (
 	"errors"
 	"fmt"
-	"gbackup-new/backend/internal/models" // Sesuaikan path module
+	"gbackup-new/backend/internal/models"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
-// MonitoringRepository mendefinisikan kontrak (APA yang bisa dilakukan)
 type MonitoringRepository interface {
 	UpsertRemoteStatus(monitor *models.Monitoring) error
 	FindAllRemotes() ([]models.Monitoring, error)
 	FindRemoteByName(remoteName string) (*models.Monitoring, error)
+	DeleteRemoteByName(remoteName string) error
+	GetAllRemoteNames() ([]string, error)
 }
 
-// monitoringRepositoryImpl adalah implementasi (BAGAIMANA dilakukan)
 type monitoringRepositoryImpl struct {
 	DB *gorm.DB
 }
 
-// NewMonitoringRepository adalah constructor (Factory)
 func NewMonitoringRepository(db *gorm.DB) MonitoringRepository {
 	return &monitoringRepositoryImpl{DB: db}
 }
 
-// ----------------------------------------------------
-// FUNGSI IMPLEMENTASI
-// ----------------------------------------------------
-
-// UpsertRemoteStatus: Melakukan Update OR Insert (UPSERT)
-// Ini dipanggil oleh Service setelah mendapat output dari 'rclone about'.
 func (r *monitoringRepositoryImpl) UpsertRemoteStatus(monitor *models.Monitoring) error {
-	// Logic Kritis: Jika remote_name sudah ada, update. Jika belum, insert.
 	result := r.DB.Clauses(clause.OnConflict{
-		// 1. Kolom yang diuji konflik: remote_name harus unik.
 		Columns: []clause.Column{{Name: "remote_name"}},
-
-		// 2. Aksi jika konflik terjadi: UPDATE kolom-kolom ini.
 		DoUpdates: clause.AssignmentColumns([]string{
 			"status_connect",
 			"total_storage_gb",
 			"used_storage_gb",
 			"free_storage_gb",
 			"last_checked_at",
+			"system_message",
+			"active_job_count",
 		}),
 	}).Create(monitor)
 
 	return result.Error
 }
 
-// FindAllRemotes: Mengambil semua data monitoring untuk UI Remote Monitoring.
 func (r *monitoringRepositoryImpl) FindAllRemotes() ([]models.Monitoring, error) {
 	var remotes []models.Monitoring
-
 	result := r.DB.Find(&remotes)
 
 	if result.Error != nil && result.Error != gorm.ErrRecordNotFound {
@@ -69,9 +58,20 @@ func (r *monitoringRepositoryImpl) FindRemoteByName(remoteName string) (*models.
 	result := r.DB.Where("remote_name = ?", remoteName).First(&monitor)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("remote name %s tidak ditemukan", remoteName)
+			return nil, fmt.Errorf("remote %s tidak ditemukan", remoteName)
 		}
 		return nil, result.Error
 	}
 	return &monitor, nil
+}
+
+func (r *monitoringRepositoryImpl) DeleteRemoteByName(remoteName string) error {
+	result := r.DB.Where("remote_name = ?", remoteName).Delete(&models.Monitoring{})
+	return result.Error
+}
+
+func (r *monitoringRepositoryImpl) GetAllRemoteNames() ([]string, error) {
+	var names []string
+	result := r.DB.Model(&models.Monitoring{}).Pluck("remote_name", &names)
+	return names, result.Error
 }

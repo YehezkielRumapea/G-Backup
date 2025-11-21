@@ -1,9 +1,12 @@
 <template>
     <tr>
         <td>
-            <strong>{{ remote.remote_name }}</strong>
-            <div v-if="remote.system_message" class="system-warning">
-                ⚠️ {{ remote.system_message }}
+            <div class="remote-name">
+                <strong>{{ remote.remote_name }}</strong>
+            </div>
+            
+            <div v-if="remote.system_message" class="warning">
+                {{ remote.system_message }}
             </div>
         </td>
         
@@ -14,31 +17,27 @@
         </td>
 
         <td>
-            {{ storageDisplay }}
-            
-            <div class="storage-bar-container">
-                <div 
-                    class="storage-progress" 
-                    :style="{ width: usagePercentage + '%' }" 
-                >
+            <div class="storage-info">
+                <span>{{ usedFormatted }} / {{ totalFormatted }} GB</span>
+                <div class="storage-bar">
+                    <div 
+                        class="bar-fill" 
+                        :style="{ width: usagePercentage + '%' }"
+                    ></div>
                 </div>
+                <span class="percentage">{{ usagePercentage.toFixed(0) }}%</span>
             </div>
         </td>
         
-        <td>
-            <span :class="{'job-count-high': remote.active_job_count > 0}">
-                {{ remote.active_job_count }}
-            </span>
-        </td>
+        <td class="center">{{ remote.active_job_count }}</td>
         
-        <td>{{ formatLastChecked(remote.last_checked_at) }}</td>
+        <td class="text-muted">{{ formatLastChecked(remote.last_checked_at) }}</td>
     </tr>
 </template>
 
 <script setup>
 import { computed } from 'vue';
 
-// WAJIB: Menerima objek 'remote' dari parent (Remotes.vue)
 const props = defineProps({
     remote: {
         type: Object,
@@ -46,37 +45,21 @@ const props = defineProps({
     }
 });
 
-// --- LOGIKA PERHITUNGAN & FORMATTING ---
+const used = computed(() => props.remote.used_storage_gb || 0);
+const total = computed(() => props.remote.total_storage_gb || 0);
 
-// 1. Hitungan Persentase Penggunaan
 const usagePercentage = computed(() => {
-    // Menggunakan nama field snake_case dari JSON
-    const used = props.remote.used_storage_gb; 
-    const total = props.remote.total_storage_gb;
-
-    if (!total || total === 0 || isNaN(total)) {
-        return 0;
-    }
-    // Menghitung persentase
-    return (used / total) * 100;
+    if (!total.value || total.value === 0) return 0;
+    return (used.value / total.value) * 100;
 });
 
-// 2. Format String Tampilan
-const storageDisplay = computed(() => {
-    const used = props.remote.used_storage_gb;
-    const total = props.remote.total_storage_gb;
-    const percentage = usagePercentage.value.toFixed(0);
-
-    const usedFormatted = used.toFixed(2);
-    const totalFormatted = total.toFixed(2);
-
-    // Solusi untuk display <0.01 GB (agar tampilan 0.00 tidak menyesatkan)
-    const displayUsed = (used > 0 && usedFormatted === "0.00") ? " <0.01" : usedFormatted;
-
-    return `${displayUsed} (${percentage}%) Used ${totalFormatted} GB `;
+const usedFormatted = computed(() => {
+    if (used.value > 0 && used.value < 0.01) return '<0.01';
+    return used.value.toFixed(2);
 });
 
-// 3. Format Tanggal
+const totalFormatted = computed(() => total.value.toFixed(2));
+
 function formatLastChecked(isoDate) {
     if (!isoDate) return 'N/A';
     try {
@@ -95,35 +78,81 @@ function formatLastChecked(isoDate) {
 </script>
 
 <style scoped>
-/* --- STYLING BARIS REMOTE --- */
-/* Pastikan styling ini sudah di-copy dari Remotes.vue jika Anda belum memilikinya di sini */
+.remote-name {
+    font-size: 0.90rem; /* atau 0.65rem kalau mau lebih kecil lagi */
+    margin-bottom: 0.25rem;
+}
 
 .status {
-    padding: 4px 8px;
-    border-radius: 12px;
-    font-weight: bold;
-    font-size: 0.8rem;
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
     color: white;
 }
-.status.connected { background-color: #2ecc71; }
-.status.disconnected { background-color: #e74c3c; }
 
-.job-count-high {
-    font-weight: bold;
-    color: #f39c12;
+.status.connected {
+    background-color: #27ae60;
 }
 
-.storage-bar-container {
-    max-width: 200px; 
-    height: 8px;
-    background-color: #ffffff;
-    border-radius: 4px;
+.status.disconnected {
+    background-color: #e74c3c;
+}
+
+.warning {
+    font-size: 0.75rem;
+    color: #e67e22;
+    margin-top: 0.25rem;
+}
+
+.storage-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.storage-info > span:first-child {
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.storage-bar {
+    width: 150px;
+    height: 4px;
+    background-color: #ecf0f1;
+    border-radius: 2px;
     overflow: hidden;
-    margin-top: 4px;
 }
-.storage-progress {
+
+.bar-fill {
     height: 100%;
-    background-color: #260aa3; 
+    background-color: #3498db;
     transition: width 0.3s ease;
+}
+
+.percentage {
+    font-size: 0.75rem;
+    color: #7f8c8d;
+    font-weight: 500;
+}
+
+.center {
+    text-align: center;
+}
+
+.text-muted {
+    color: #95a5a6;
+    font-size: 0.85rem;
+}
+
+td {
+    padding: 0.75rem;
+    vertical-align: middle;
+}
+
+strong {
+    color: #1a1a1a;
 }
 </style>

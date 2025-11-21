@@ -1,8 +1,9 @@
 <template>
-    <tr>
+    <tr> <div class="job-name">
         <td><strong>{{ job.job_name }}</strong></td>
+        </div>
         
-        <td>{{ job.type }}</td> 
+        <td>{{ job.source_path }}</td> 
 
         <td>{{ job.gdrive_target }}</td>
 
@@ -94,9 +95,7 @@ function getStatusClass(status) {
 }
 </script>
 
-<style scoped>
-/* Row hover effect */
-/* =============================== */
+<style scoped>/* =============================== */
 /* == TABLE ROW HOVER EFFECT ==== */
 /* =============================== */
 tr:hover {
@@ -104,87 +103,89 @@ tr:hover {
 }
 
 /* =============================== */
-/* == STATUS BADGES ============= */
+/* == STATUS BADGES (SAMA DGN REMOTE) == */
 /* =============================== */
 .status {
-  padding: 4px 10px;
-  border-radius: 12px;
-  font-weight: 600;
-  font-size: 0.8rem;
-  color: white;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
   display: inline-block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: white;
 }
 
 .status.pending { 
-  background-color: #94a3b8; 
+  background-color: #7f8c8d; 
 }
 
 .status.running { 
-  background-color: #3b82f6;
-  animation: pulse-blue 2s ease-in-out infinite;
+  background-color: #3498db;
 }
 
 .status.completed,
 .status.success { 
-  background-color: #10b981; 
+  background-color: #27ae60; 
 }
 
 .status.failed,
-.status.fail,
 .status.fail_pre_script,
 .status.fail_rclone,
 .status.fail_post_script { 
-  background-color: #ef4444; 
-}
-
-@keyframes pulse-blue {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+  background-color: #e74c3c; 
 }
 
 /* =============================== */
-/* == ACTIONS COLUMN ============ */
+/* == TABLE CELL STYLE ========== */
+/* =============================== */
+td {
+  padding: 0.75rem;
+  vertical-align: middle;
+}
+
+strong {
+  color: #1a1a1a;
+}
+
+/* =============================== */
+/* == ACTION COLUMN ============= */
 /* =============================== */
 .job-actions-col {
-  width: 160px;
+  width: 150px;
+}
+
+.job-name {
+  font-size: 0.90rem; /* atau 0.65rem kalau mau lebih kecil lagi */
+  margin-bottom: 0.25rem;
 }
 
 .actions {
   display: flex;
-  gap: 10px;
   justify-content: center;
+  gap: 10px;
   align-items: center;
 }
 
 /* =============================== */
-/* == ICON-ONLY BUTTON STYLE ==== */
+/* == ICON BUTTONS (SAMA DGN REMOTE) == */
 /* =============================== */
 .icon-btn {
-  background: none;
   border: none;
+  background: none;
   cursor: pointer;
-  font-size: 1.4rem;
-  padding: 4px;
-  transition: transform 0.15s ease, color 0.15s ease;
-  color: #6b7280; /* default gray */
+  padding: 6px;
+  font-size: 1.3rem;
+  transition: transform 0.15s ease, opacity 0.2s ease;
 }
 
 .icon-btn:hover {
-  transform: scale(1.2);
-  color: #000;
+  opacity: 0.85;
+  transform: scale(1.15);
 }
 
-.icon-btn:active {
-  transform: scale(1.05);
-}
-
-/* =============================== */
-/* == SPECIFIC ICON COLORS ====== */
-/* =============================== */
+/* Warna ikon — konsisten dengan yang sebelumnya */
 .icon-btn.edit { 
-  color: #3b82f6; 
+  color: #f39c12; 
 }
 
 .icon-btn.run { 
@@ -192,33 +193,15 @@ tr:hover {
 }
 
 .icon-btn.view { 
-  color: #3499db; 
+  color: #3498db;
   font-weight: bold;
 }
 
 .icon-btn.delete { 
-  color: #ef4444; 
+  color: #e74c3c; 
 }
 
-.icon-btn.edit:hover { 
-  color: #1d4ed8; 
-}
-
-.icon-btn.run:hover { 
-  color: #d97706; 
-}
-
-.icon-btn.view:hover { 
-  color: #6d28d9; 
-}
-
-.icon-btn.delete:hover { 
-  color: #b91c1c; 
-}
-
-/* =============================== */
-/* == DISABLED STATE ============ */
-/* =============================== */
+/* Disabled */
 .icon-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -226,21 +209,20 @@ tr:hover {
 }
 
 /* =============================== */
-/* == RESPONSIVE ================ */
+/* RESPONSIVE ==================== */
 /* =============================== */
 @media (max-width: 768px) {
   .icon-btn {
-    font-size: 1.2rem;
+    font-size: 1.15rem;
   }
-  
+
   .actions {
     gap: 6px;
   }
-  
+
   .job-actions-col {
     width: 130px;
   }
 }
-
 
 </style>

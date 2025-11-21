@@ -1,11 +1,10 @@
 <template>
   <tr>
+    <div class="job-name">
     <td><strong>{{ job.job_name }}</strong></td>
-    
-    <td>{{ job.type }}</td>
-
+        </div>
+    <td>{{ job.source_path }}</td>
     <td>{{ job.gdrive_target }}</td>
-
     <td>{{ job.last_run || 'N/A' }}</td>
 
     <td>
@@ -68,77 +67,97 @@ function confirmDelete() {
 </script>
 
 <style scoped>
-/* --- STYLING BARIS JOB --- */
+/* --- STATUS BADGE (mengikuti style remote) --- */
 .status {
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-weight: bold;
-  font-size: 0.8rem;
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
   color: white;
 }
 
-.status.pending { 
-  background-color: #aaa; 
+.status.pending {
+  background-color: #7f8c8d;
 }
 
-.status.running { 
+.status.running {
   background-color: #3498db;
-  font-size: 12px;
 }
 
-.status.completed, 
-.status.success { 
-  background-color: #2ecc71; 
+.status.completed,
+.status.success {
+  background-color: #27ae60;
 }
 
-.status.failed, 
+.status.failed,
 .status.fail_source_check, 
 .status.fail_pre_script, 
 .status.fail_rclone,
-.status.fail_post_script { 
-  background-color: #e74c3c; 
+.status.fail_post_script {
+  background-color: #e74c3c;
 }
 
-/* Styling kolom aksi */
+/* --- TABEL CELL --- */
+td {
+  padding: 0.75rem;
+  vertical-align: middle;
+}
+
+strong {
+  color: #1a1a1a;
+}
+
+/* --- KOLUM A K S I --- */
 .job-actions-col {
   width: 150px;
 }
 
-.actions {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
+.job-name {
+  font-size: 0.90rem; /* atau 0.65rem kalau mau lebih kecil lagi */
+  margin-bottom: 0.25rem;
 }
 
+.actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+/* Tombol aksi – konsisten & modern */
 .action-btn {
   border: none;
   background: none;
   cursor: pointer;
-  font-size: 1.2rem;
-  padding: 5px;
-  transition: opacity 0.2s;
+  padding: 6px;
+  font-size: 1.15rem;
+  transition: transform 0.15s ease, opacity 0.2s ease;
 }
 
 .action-btn:hover {
-  opacity: 0.8;
+  opacity: 0.85;
+  transform: scale(1.15);
 }
 
-/* Warna tombol aksi */
-.action-btn.edit { 
-  color: #f39c12; 
+/* Warna ikon sesuai kategori */
+.action-btn.edit {
+  color: #f39c12;
 }
 
-.action-btn.view { 
-  color: #3499db; 
-  font-weight: bold; 
+.action-btn.view {
+  color: #3498db;
 }
 
-.action-btn.delete { 
-  color: #e74c3c; 
+.action-btn.delete {
+  color: #e74c3c;
 }
 
 .action-btn.delete.disabled {
   color: #ccc;
   cursor: not-allowed;
+  transform: none;
+  opacity: 0.5;
 }
+
 </style>

@@ -171,18 +171,34 @@ func main() {
 
 	// --- 7. START DAEMONS (Goroutines) ---
 	schedulerSvc.StartDaemon() // Memulai CRON Daemon
+	monitorSvc.StartMonitoringDaemon()
 	// (Tambahkan Goroutine untuk auto-update monitoring jika perlu)
 
 	go func() {
 		time.Sleep(2 * time.Second)
-		fmt.Println("Inisialisasi status remote monitoring...")
+		fmt.Println("[Startup] Inisialisasi status remote monitoring...")
 
-		// Ambil remote dan rclone.conf
-		if err := monitorSvc.DiscoverAndSaveRemote(); err != nil {
-			fmt.Printf("❌ ERROR: Gagal melakukan Remote Discovery dan Inisialisasi: %v\n", err)
+		if err := monitorSvc.SyncRemotesWithRclone(); err != nil {
+			fmt.Printf("❌ ERROR: Gagal sync remote: %v\n", err)
 			return
 		}
-		fmt.Println("Inisialisasi status remote monitoring selesai.")
+
+		remotes, err := monitorSvc.GetRemoteStatusList()
+		if err != nil {
+			fmt.Printf("❌ ERROR: Gagal mengambil remote: %v\n", err)
+			return
+		}
+
+		if len(remotes) > 0 {
+			fmt.Printf("✅ Menemukan %d remote, memulai update status...\n", len(remotes))
+			for _, remote := range remotes {
+				go monitorSvc.UpdateRemoteStatus(remote.RemoteName)
+			}
+		} else {
+			fmt.Println("⚠️ Tidak ada remote yang dikonfigurasi di rclone.conf")
+		}
+
+		fmt.Println("✅ Inisialisasi remote monitoring selesai.")
 	}()
 
 	fmt.Println("\nBackend diinisialisasi. Menjalankan Echo server di port 8080")

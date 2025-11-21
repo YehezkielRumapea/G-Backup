@@ -81,7 +81,7 @@
 
       <div v-else-if="nextJob" class="next-job-card">
         <div class="job-header">
-          <span class="job-type-badge">{{ nextJob.jobType }}</span>
+          <span class="job-type-badge">{{ nextJob.sourcePath }}</span>
           <span class="job-time">{{ formatNextRun(nextJob.nextRun) }}</span>
         </div>
         <h3>{{ nextJob.name }}</h3>
@@ -216,7 +216,8 @@ const nextJob = computed(() => {
     nextRun: futureJobs[0].nextRunDate,
     name: futureJobs[0].job_name,
     remoteName: futureJobs[0].gdrive_target,
-    scheduleCron: futureJobs[0].next_run
+    scheduleCron: futureJobs[0].next_run,
+    sourcePath: futureJobs[0].source_path,
   } : null;
 });
 

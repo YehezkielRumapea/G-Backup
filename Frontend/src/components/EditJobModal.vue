@@ -23,23 +23,6 @@
         <form v-else @submit.prevent="handleSubmit" class="config-form">
           <p class="form-description">Edit job configuration. Operation mode cannot be changed.</p>
 
-          <!-- Operation Mode (Display Only) -->
-          <div class="form-group info-group">
-            <label>Operation Mode</label>
-            <div class="info-display">
-              <span class="badge" :class="jobData?.operation_mode?.toLowerCase()">
-                {{ jobData?.operation_mode }}
-              </span>
-            </div>
-          </div>
-
-          <!-- Rclone Mode (Display Only) -->
-          <div class="form-group info-group">
-            <label>Rclone Mode</label>
-            <div class="info-display">
-              {{ jobData?.rclone_mode || 'N/A' }}
-            </div>
-          </div>
 
           <!-- Job Name -->
           <div class="form-group">
@@ -66,18 +49,21 @@
             <small class="hint">Path file hasil dari pre-script yang akan di-upload</small>
           </div>
 
-          <!-- Remote Name -->
-          <div class="form-group">
-            <label for="edit-remote">Remote Name *</label>
-            <input 
-              type="text" 
-              id="edit-remote" 
-              v-model="formData.remote_name" 
-              required 
-              placeholder="Gdrive1"
-            />
-            <small class="hint">Nama remote yang sudah dikonfigurasi di rclone</small>
+          <!-- Target Storage -->
+          <div>
+            <label for="gdrive_target">Pilih GDrive Target:</label>
+            <select v-model="formData.gdrive_target" required>
+              <option value="" disabled>Pilih Storage</option>
+              <option 
+                v-for="remote in availableRemotes" 
+                :key="remote.remote_name" 
+                :value="remote.remote_name"
+              >
+                {{ remote.remote_name }}
+              </option>
+            </select>
           </div>
+
 
           <!-- Destination Path -->
           <div class="form-group">
@@ -568,6 +554,17 @@ const handleClose = () => {
     emit('close');
   }
 };
+
+function formatGB(value) {
+  if (!value) return "0.00";
+  return Number(value).toFixed(2);
+}
+
+function calcPercentage(used, total) {
+  if (!total || total === 0) return 0;
+  return (used / total) * 100;
+}
+
 </script>
 
 <style scoped>
