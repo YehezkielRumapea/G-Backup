@@ -31,7 +31,7 @@ func (r *logRepositoryImpl) CreateLog(log *models.Log) error {
 
 	var count int64
 	if err := r.DB.Model(&models.Log{}).Count(&count).Error; err != nil {
-		fmt.Printf("Gagal menghitung Total Log: &v\n", err)
+		fmt.Printf("Gagal menghitung Total Log: %v\n", err)
 		return nil
 	}
 

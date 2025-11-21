@@ -2,14 +2,13 @@ package service
 
 import (
 	"fmt"
-	"os/exec" // Package inti untuk menjalankan command
+	"os/exec"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
 
-// RcloneResult menampung output dan status eksekusi CLI
-// (Nama ini bisa diubah menjadi 'CliResult' jika Anda mau,
-// karena ini menangani Rclone, Bash, dan Mysqldump)
 type RcloneResult struct {
 	Success          bool
 	Output           string
@@ -18,37 +17,81 @@ type RcloneResult struct {
 	TransferredBytes int64
 }
 
-// ExecuteCliJob: Menjalankan command CLI APAPUN
-// Menerima commandArgs sebagai slice (e.g., {"bash", "-c", "echo 'hello'"})
 func ExecuteCliJob(commandArgs []string) RcloneResult {
+	// 1. Safety Check: Pastikan command tidak kosong agar tidak panic
+	if len(commandArgs) == 0 {
+		return RcloneResult{
+			Success:  false,
+			ErrorMsg: "Command arguments cannot be empty",
+		}
+	}
+
 	startTime := time.Now()
 
-	// 1. Ambil command utama (e.g., "rclone" or "bash")
 	cmdName := commandArgs[0]
-	// 2. Ambil sisa argumen
 	args := commandArgs[1:]
 
-	// 3. Buat command
 	cmd := exec.Command(cmdName, args...)
 
-	// 4. Tangkap semua output (stdout dan stderr digabungkan)
 	output, err := cmd.CombinedOutput()
 	duration := time.Since(startTime)
 
+	outputStr := strings.TrimSpace(string(output))
+
 	result := RcloneResult{
 		Duration: duration,
-		Output:   strings.TrimSpace(string(output)),
+		Output:   outputStr,
 	}
 
-	// 5. Error Handling Kritis (Cek Exit Code)
+	// Parse bytes baik sukses maupun gagal (kadang rclone error tapi sempat transfer data)
+	result.TransferredBytes = parseTransferredBytes(outputStr)
+
 	if err != nil {
-		// Jika command gagal (exit code != 0)
 		result.Success = false
 		result.ErrorMsg = fmt.Sprintf("Exit Error: %v. Output: %s", err, result.Output)
 		return result
 	}
 
-	// Jika command sukses (exit code == 0)
 	result.Success = true
 	return result
+}
+
+func parseTransferredBytes(output string) int64 {
+	// Regex untuk menangkap angka dan unit
+	// Menangkap: "Transferred:   12.500 MiB"
+	re := regexp.MustCompile(`Transferred:\s+([\d\.]+)\s*(\w+i?B)`)
+
+	// 1. PERBAIKAN KRITIS: Gunakan FindAll untuk mengambil SEMUA kemunculan
+	matches := re.FindAllStringSubmatch(output, -1)
+
+	if len(matches) == 0 {
+		return 0
+	}
+
+	// 2. Ambil match TERAKHIR (status final)
+	lastMatch := matches[len(matches)-1]
+
+	valueStr := lastMatch[1]
+	unit := strings.ToUpper(lastMatch[2])
+
+	value, err := strconv.ParseFloat(valueStr, 64)
+	if err != nil {
+		return 0
+	}
+
+	// 3. Konversi Unit
+	switch unit {
+	case "B":
+		return int64(value)
+	case "KB", "KIB":
+		return int64(value * 1024)
+	case "MB", "MIB":
+		return int64(value * 1024 * 1024)
+	case "GB", "GIB":
+		return int64(value * 1024 * 1024 * 1024)
+	case "TB", "TIB":
+		return int64(value * 1024 * 1024 * 1024 * 1024)
+	default:
+		return int64(value)
+	}
 }

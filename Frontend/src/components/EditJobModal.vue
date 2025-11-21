@@ -7,24 +7,20 @@
           <button class="close-btn" @click="handleClose">×</button>
         </div>  
         
-        <!-- Loading State -->
         <div v-if="isLoading" class="loading-container">
           <div class="spinner"></div>
           <p>Loading job data...</p>
         </div>
 
-        <!-- Error State -->
         <div v-else-if="loadError" class="error-banner">
           <p>{{ loadError }}</p>
           <button @click="loadJobData" class="retry-btn">Try Again</button>
         </div>
 
-        <!-- Form -->
         <form v-else @submit.prevent="handleSubmit" class="config-form">
           <p class="form-description">Edit job configuration. Operation mode cannot be changed.</p>
 
 
-          <!-- Job Name -->
           <div class="form-group">
             <label for="edit-jobName">Job Name *</label>
             <input 
@@ -36,7 +32,6 @@
             />
           </div>
 
-          <!-- Source Path -->
           <div class="form-group">
             <label for="edit-source">Source Path (Lokal) *</label>
             <input 
@@ -49,23 +44,18 @@
             <small class="hint">Path file hasil dari pre-script yang akan di-upload</small>
           </div>
 
-          <!-- Target Storage -->
-          <div>
-            <label for="gdrive_target">Pilih GDrive Target:</label>
-            <select v-model="formData.gdrive_target" required>
-              <option value="" disabled>Pilih Storage</option>
-              <option 
-                v-for="remote in availableRemotes" 
-                :key="remote.remote_name" 
-                :value="remote.remote_name"
-              >
-                {{ remote.remote_name }}
+          <div class="form-group">
+            <label for="edit-remote">Remote Name *</label>
+            <select id="edit-remote" v-model="formData.remote_name" required>
+              <option value="" disabled>Select Remote</option>
+              <option v-for="remote in remoteList" :key="remote.name" :value="remote.name">
+                {{ remote.name }}
               </option>
             </select>
+            <small class="hint">Nama remote yang sudah dikonfigurasi di rclone</small>
           </div>
 
 
-          <!-- Destination Path -->
           <div class="form-group">
             <label for="edit-dest">Destination Path (Cloud) *</label>
             <input 
@@ -78,7 +68,6 @@
             <small class="hint">Folder tujuan di cloud storage</small>
           </div>
 
-          <!-- Schedule Section -->
           <div class="schedule-section">
             <div class="section-header">
               <h3>Schedule Configuration</h3>
@@ -94,7 +83,6 @@
               </label>
             </div>
 
-            <!-- Schedule Options -->
             <transition name="slide-fade">
               <div v-if="isScheduled" class="schedule-options">
                 <div class="schedule-type-selector">
@@ -109,7 +97,6 @@
                   </button>
                 </div>
 
-                <!-- HOURLY -->
                 <div v-if="scheduleType === 'hourly'" class="schedule-config">
                   <label>Every</label>
                   <div class="input-group">
@@ -124,7 +111,6 @@
                   </div>
                 </div>
 
-                <!-- DAILY -->
                 <div v-if="scheduleType === 'daily'" class="schedule-config">
                   <label>Every day at</label>
                   <div class="input-group">
@@ -136,7 +122,6 @@
                   </div>
                 </div>
 
-                <!-- WEEKLY -->
                 <div v-if="scheduleType === 'weekly'" class="schedule-config">
                   <label>Every</label>
                   <div class="weekdays-selector">
@@ -160,7 +145,6 @@
                   </div>
                 </div>
 
-                <!-- MONTHLY -->
                 <div v-if="scheduleType === 'monthly'" class="schedule-config">
                   <label>On day</label>
                   <div class="input-group">
@@ -183,7 +167,6 @@
                   </div>
                 </div>
 
-                <!-- CUSTOM -->
                 <div v-if="scheduleType === 'custom'" class="schedule-config">
                   <label>Custom Cron Expression</label>
                   <input 
@@ -200,7 +183,6 @@
                   </small>
                 </div>
 
-                <!-- CRON PREVIEW -->
                 <div class="cron-preview">
                   <span class="preview-label">Cron Expression:</span>
                   <code class="preview-code">{{ generatedCron || '-' }}</code>
@@ -210,36 +192,28 @@
             </transition>
           </div>
 
-          <!-- Pre-Script -->
           <div class="form-group">
             <label for="edit-pre">Pre-Script (Executed BEFORE Rclone)</label>
             <textarea 
               id="edit-pre" 
               v-model="formData.pre_script" 
-              rows="1" 
-              placeholder="#!/bin/bash
-# Example: Database dump
-mysqldump -u user -p password database > /tmp/backup.sql
-gzip /tmp/backup.sql"
+              rows="3" 
+              placeholder="#!/bin/bash..."
             ></textarea>
             <small class="hint">Script untuk generate file backup (e.g., mysqldump, tar, zip)</small>
           </div>
 
-          <!-- Post-Script -->
           <div class="form-group">
             <label for="edit-post">Post-Script (Executed AFTER successful upload)</label>
             <textarea 
               id="edit-post" 
               v-model="formData.post_script" 
-              rows="1" 
-              placeholder="#!/bin/bash
-# Example: Cleanup
-rm /tmp/backup.sql.gz"
+              rows="3" 
+              placeholder="#!/bin/bash..."
             ></textarea>
             <small class="hint">Script untuk cleanup atau notifikasi</small>
           </div>
 
-          <!-- Changes Summary -->
           <div v-if="changedFieldsCount > 0" class="changes-summary">
             <p class="summary-title">📝 Changes detected ({{ changedFieldsCount }} fields):</p>
             <ul class="changes-list">
@@ -250,12 +224,10 @@ rm /tmp/backup.sql.gz"
             </ul>
           </div>
 
-          <!-- Error Message -->
           <div v-if="submitError" class="error-banner">
             <p>{{ submitError }}</p>
           </div>
 
-          <!-- Buttons -->
           <div class="form-actions">
             <button type="button" @click="handleClose" :disabled="isSaving" class="btn-secondary">
               Cancel
@@ -276,8 +248,9 @@ rm /tmp/backup.sql.gz"
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import jobService from '@/services/jobService';
+import driveService from '@/services/driveService'; // Import driveService
 
 const props = defineProps({
   jobId: {
@@ -299,6 +272,8 @@ const loadError = ref(null);
 const submitError = ref(null);
 const jobData = ref(null);
 const originalData = ref(null);
+
+const remoteList = ref([]); // State untuk daftar remote
 
 const isScheduled = ref(false);
 const scheduleType = ref('daily');
@@ -338,10 +313,26 @@ const formData = ref({
   post_script: ''
 });
 
+// Fetch remote list from endpoint
+async function fetchRemoteList() {
+  try {
+    const res = await driveService.listRemotes();
+    // Sesuaikan dengan format response backend Anda
+    remoteList.value = Array.isArray(res) ? res : res.remotes || [];
+  } catch (err) {
+    console.error('Failed to fetch remotes:', err);
+    // Opsional: Tampilkan error di UI jika gagal fetch remote
+  }
+}
+
 // Watch modal open
 watch(() => props.isOpen, (newValue) => {
-  if (newValue && props.jobId) {
-    loadJobData();
+  if (newValue) {
+    if (props.jobId) {
+        loadJobData();
+    }
+    // Fetch remote list setiap kali modal dibuka (agar selalu fresh)
+    fetchRemoteList();
   }
 });
 
@@ -355,21 +346,21 @@ const loadJobData = async () => {
     jobData.value = data;
 
     // Store original for comparison
-originalData.value = {
-  job_name: data.JobName || '',
-  source_path: data.SourcePath || '',
-  remote_name: data.RemoteName || '',
-  destination_path: data.DestinationPath || '',
-  schedule_cron: data.ScheduleCron || '',
-  pre_script: data.PreScript || '',
-  post_script: data.PostScript || ''
-};
+    originalData.value = {
+      job_name: data.JobName || '',
+      source_path: data.SourcePath || '',
+      remote_name: data.RemoteName || '', // Ini akan otomatis terpilih di dropdown jika value-nya cocok
+      destination_path: data.DestinationPath || '',
+      schedule_cron: data.ScheduleCron || '',
+      pre_script: data.PreScript || '',
+      post_script: data.PostScript || ''
+    };
 
-// Set formData
-formData.value = { ...originalData.value };
+    // Set formData
+    formData.value = { ...originalData.value };
 
-// Parse schedule
-parseScheduleFromCron(data.ScheduleCron || '');
+    // Parse schedule
+    parseScheduleFromCron(data.ScheduleCron || '');
 
     isLoading.value = false;
   } catch (err) {
@@ -554,20 +545,10 @@ const handleClose = () => {
     emit('close');
   }
 };
-
-function formatGB(value) {
-  if (!value) return "0.00";
-  return Number(value).toFixed(2);
-}
-
-function calcPercentage(used, total) {
-  if (!total || total === 0) return 0;
-  return (used / total) * 100;
-}
-
 </script>
 
 <style scoped>
+/* Style tetap sama seperti yang sudah ada di EditJob.vue Anda */
 .edit-job-view {
   max-width: 900px;
   margin: 0 auto;
@@ -763,43 +744,6 @@ function calcPercentage(used, total) {
 .hint a {
   color: #1a1a1a;
   text-decoration: underline;
-}
-
-/* Info Display (Read-only fields) */
-.info-group label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
-  color: #1a1a1a;
-  font-size: 0.875rem;
-}
-
-.info-display {
-  background: #f5f5f5;
-  padding: 0.625rem 0.875rem;
-  border-radius: 6px;
-  border: 1px solid #e5e5e5;
-  color: #666;
-  font-size: 0.9375rem;
-}
-
-.badge {
-  display: inline-block;
-  padding: 0.375rem 0.75rem;
-  border-radius: 4px;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.badge.backup {
-  background: #dbeafe;
-  color: #1e40af;
-}
-
-.badge.restore {
-  background: #dcfce7;
-  color: #166534;
 }
 
 /* Schedule Section */

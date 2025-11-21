@@ -221,6 +221,20 @@ func (s *backupServiceImpl) executeJobLifecycle(job models.ScheduledJob) {
 		return // Hentikan eksekusi
 	}
 
+	lines := strings.Split(resultRclone.Output, "\n")
+	var transferStatus string
+	for _, line := range lines {
+		if strings.Contains(line, "Transferred:") {
+			transferStatus = strings.TrimSpace(line)
+		}
+	}
+
+	if transferStatus != "" {
+		fmt.Printf("📊 [WORKER %d] Stats: %s\n", job.ID, transferStatus)
+		// Tambahkan info ini ke output agar tersimpan di DB Log
+		resultRclone.Output = fmt.Sprintf("%s\n\n%s", transferStatus, resultRclone.Output)
+	}
+
 	// --- FASE 3: POST-SCRIPT ---
 	if job.PostScript != "" {
 		fmt.Printf("[WORKER %d] Menjalankan Post-Script...\n", job.ID)
@@ -288,6 +302,8 @@ func (s *backupServiceImpl) buildRcloneArgs(job models.ScheduledJob, runtimeDest
 		Destination,
 		"--checksum",
 		"--no-traverse",
+		"--stats", "0", // 1. Hanya print statistik SATU KALI saat selesai
+		"--stats-log-level", "NOTICE",
 	}
 
 	return args

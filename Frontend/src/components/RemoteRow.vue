@@ -1,10 +1,7 @@
 <template>
     <tr>
         <td>
-            <div class="remote-name">
-                <strong>{{ remote.remote_name }}</strong>
-            </div>
-            
+            <div class="remote-icon"><strong>{{ remote.remote_name }}</strong></div>
             <div v-if="remote.system_message" class="warning">
                 {{ remote.system_message }}
             </div>
@@ -19,13 +16,15 @@
         <td>
             <div class="storage-info">
                 <span>{{ usedFormatted }} / {{ totalFormatted }} GB</span>
-                <div class="storage-bar">
-                    <div 
-                        class="bar-fill" 
-                        :style="{ width: usagePercentage + '%' }"
-                    ></div>
+                <div class="storage-row">
+                    <div class="storage-bar">
+                        <div 
+                            class="bar-fill" 
+                            :style="{ width: usagePercentage + '%' }"
+                        ></div>
+                    </div>
+                    <span class="percentage">{{ usagePercentage.toFixed(0) }}%</span>
                 </div>
-                <span class="percentage">{{ usagePercentage.toFixed(0) }}%</span>
             </div>
         </td>
         
@@ -78,11 +77,6 @@ function formatLastChecked(isoDate) {
 </script>
 
 <style scoped>
-.remote-name {
-    font-size: 0.90rem; /* atau 0.65rem kalau mau lebih kecil lagi */
-    margin-bottom: 0.25rem;
-}
-
 .status {
     display: inline-block;
     padding: 3px 8px;
@@ -114,8 +108,14 @@ function formatLastChecked(isoDate) {
 }
 
 .storage-info > span:first-child {
-    font-size: 0.9rem;
+    font-size: 0.73rem;
     font-weight: 500;
+}
+
+.storage-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
 .storage-bar {
@@ -136,6 +136,7 @@ function formatLastChecked(isoDate) {
     font-size: 0.75rem;
     color: #7f8c8d;
     font-weight: 500;
+    min-width: 2rem;
 }
 
 .center {
@@ -154,5 +155,10 @@ td {
 
 strong {
     color: #1a1a1a;
+}
+
+.remote-icon {
+    font-size: 0.90rem;
+    margin-bottom: 0.25rem;
 }
 </style>
