@@ -3,70 +3,65 @@
     <Transition name="modal">
       <div v-if="isVisible && log" class="modal-overlay" @click.self="handleClose">
         <div class="modal-container">
-          <!-- Header -->
           <div class="modal-header">
             <div class="header-left">
               <h3>Log Details</h3>
-              <span class="log-id">ID: {{ log.ID }}</span>
             </div>
             <button @click="handleClose" class="close-btn">×</button>
           </div>
 
-          <!-- Content -->
           <div class="modal-body">
-            <!-- Job Info -->
             <div class="info-section">
               <h4>Job Information</h4>
               <div class="info-grid">
-                <div class="info-item">
-                  <span class="label">Job ID</span>
-                  <span class="value">{{ log.JobID || 'Manual Job' }}</span>
-                </div>
-                <div class="info-item">
+                                <div class="info-item">
                   <span class="label">Job Name</span>
                   <span class="value">{{ getJobName(log) }}</span>
                 </div>
                 <div class="info-item">
+                  <span class="label">Job ID</span>
+                  <span class="value">{{ log.JobID || log.job_id || 'Manual Job' }}</span>
+                </div>
+                <div class="info-item">
                   <span class="label">Status</span>
                   <span class="value">
-                    <span class="status-badge" :class="getStatusClass(log.Status)">
-                      {{ log.Status }}
+                    <span class="status-badge" :class="getStatusClass(log.Status || log.status)">
+                      {{ log.Status || log.status }}
                     </span>
                   </span>
                 </div>
                 <div class="info-item">
                   <span class="label">Duration</span>
-                  <span class="value">{{ log.DurationSec }} seconds</span>
+                  <span class="value">{{ log.DurationSec || log.duration_sec || 0 }} seconds</span>
                 </div>
+                
                 <div class="info-item">
-                  <span class="label">TransferredByte</span>
-                  <span class="value">{{ log.transferredByte }} Byte</span>
+                  <span class="label">Transferred Size</span>
+                  <span class="value">{{ formatFileSize(getTransferredBytes(log)) }}</span>
                 </div>
+
                 <div class="info-item">
                   <span class="label">Timestamp</span>
-                  <span class="value">{{ formatFullTimestamp(log.Timestamp) }}</span>
+                  <span class="value">{{ formatFullTimestamp(log.Timestamp || log.timestamp) }}</span>
                 </div>
               </div>
             </div>
 
-            <!-- Output Message -->
             <div class="info-section">
               <h4>Output Message</h4>
               <div class="output-box">
-                <pre>{{ log.Message || 'No message available' }}</pre>
+                <pre>{{ log.Message || log.message || 'No message available' }}</pre>
               </div>
             </div>
 
-            <!-- Config Snapshot (if manual job) -->
-            <div v-if="log.ConfigSnapshot" class="info-section">
+            <div v-if="log.ConfigSnapshot || log.config_snapshot" class="info-section">
               <h4>Configuration Snapshot</h4>
               <div class="config-box">
-                <pre>{{ formatJSON(log.ConfigSnapshot) }}</pre>
+                <pre>{{ formatJSON(log.ConfigSnapshot || log.config_snapshot) }}</pre>
               </div>
             </div>
           </div>
 
-          <!-- Footer -->
           <div class="modal-footer">
             <button @click="handleClose" class="btn-close">Close</button>
           </div>
@@ -88,12 +83,24 @@ function handleClose() {
   emit('close');
 }
 
+// ✅ Helper Baru: Menangani berbagai kemungkinan nama field dari backend
+function getTransferredBytes(log) {
+  if (!log) return 0;
+  // Cek prioritas nama field (sesuaikan dengan JSON response backend Anda)
+  return log.transferred_bytes || log.TransferredBytes || log.TransferredByte || log.transferredByte || 0;
+}
+
 function getJobName(log) {
+  // Cek relasi ScheduledJob
   if (log.ScheduledJob?.JobName) return log.ScheduledJob.JobName;
-  if (log.ConfigSnapshot) {
+  if (log.scheduled_job?.job_name) return log.scheduled_job.job_name;
+  
+  // Cek ConfigSnapshot
+  const snapshot = log.ConfigSnapshot || log.config_snapshot;
+  if (snapshot) {
     try {
-      const config = JSON.parse(log.ConfigSnapshot);
-      return config.job_name || 'Manual Job';
+      const config = typeof snapshot === 'string' ? JSON.parse(snapshot) : snapshot;
+      return config.job_name || config.JobName || 'Manual Job';
     } catch (e) {
       return 'Manual Job';
     }
@@ -102,6 +109,7 @@ function getJobName(log) {
 }
 
 function getStatusClass(status) {
+  if (!status) return 'status-default';
   const s = status.toUpperCase();
   if (['SUCCESS', 'COMPLETED'].includes(s)) return 'status-success';
   if (s.includes('FAIL') || s === 'ERROR') return 'status-failed';
@@ -110,31 +118,48 @@ function getStatusClass(status) {
 }
 
 function formatFullTimestamp(timestamp) {
+  if (!timestamp) return '-';
   try {
-    return new Date(timestamp).toLocaleString('id-ID');
+    return new Date(timestamp).toLocaleString('id-ID', {
+      dateStyle: 'medium',
+      timeStyle: 'medium'
+    });
   } catch (e) {
     return timestamp;
   }
 }
 
-function formatJSON(jsonString) {
+function formatFileSize(bytes) {
+  const size = Number(bytes); // Pastikan tipe number
+  if (!size || size === 0) return '0 B';
+  
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const k = 1024;
+  const i = Math.floor(Math.log(size) / Math.log(k));
+  
+  return parseFloat((size / Math.pow(k, i)).toFixed(2)) + ' ' + units[i];
+}
+
+function formatJSON(jsonInput) {
+  if (!jsonInput) return '';
   try {
-    return JSON.stringify(JSON.parse(jsonString), null, 2);
+    const obj = typeof jsonInput === 'string' ? JSON.parse(jsonInput) : jsonInput;
+    return JSON.stringify(obj, null, 2);
   } catch (e) {
-    return jsonString;
+    return jsonInput;
   }
 }
 </script>
 
 <style scoped>
-/* Modal overlay */
+/* ... (Style CSS Anda sudah bagus, biarkan tetap sama) ... */
 .modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
@@ -285,13 +310,6 @@ function formatJSON(jsonString) {
   font-weight: 500;
 }
 
-.info-item .value.operation {
-  color: #1a1a1a;
-  text-transform: uppercase;
-  font-weight: 600;
-}
-
-/* Status Badge */
 .status-badge {
   display: inline-flex;
   align-items: center;
@@ -303,37 +321,19 @@ function formatJSON(jsonString) {
   letter-spacing: 0.05em;
 }
 
-.status-success {
-  background: #d1fae5;
-  color: #065f46;
-}
+.status-success { background: #d1fae5; color: #065f46; }
+.status-failed { background: #fee2e2; color: #991b1b; }
+.status-running { background: #fef3c7; color: #92400e; }
+.status-default { background: #e5e7eb; color: #374151; }
 
-.status-failed {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
-.status-running {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.status-default {
-  background: #e5e7eb;
-  color: #374151;
-}
-
-/* Output Box */
-.output-box,
-.config-box {
+.output-box, .config-box {
   background: #1a1a1a;
   border-radius: 6px;
   padding: 1rem;
   overflow-x: auto;
 }
 
-.output-box pre,
-.config-box pre {
+.output-box pre, .config-box pre {
   margin: 0;
   color: #d4d4d4;
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
@@ -343,7 +343,6 @@ function formatJSON(jsonString) {
   word-break: break-word;
 }
 
-/* Footer */
 .modal-footer {
   padding: 1rem 1.5rem;
   background: white;
@@ -369,56 +368,18 @@ function formatJSON(jsonString) {
 }
 
 /* Transitions */
-.modal-enter-active,
-.modal-leave-active {
-  transition: opacity 0.2s ease;
-}
+.modal-enter-active, .modal-leave-active { transition: opacity 0.2s ease; }
+.modal-enter-from, .modal-leave-to { opacity: 0; }
+.modal-enter-active .modal-container, .modal-leave-active .modal-container { transition: transform 0.2s ease; }
+.modal-enter-from .modal-container, .modal-leave-to .modal-container { transform: scale(0.95); }
 
-.modal-enter-from,
-.modal-leave-to {
-  opacity: 0;
-}
-
-.modal-enter-active .modal-container,
-.modal-leave-active .modal-container {
-  transition: transform 0.2s ease;
-}
-
-.modal-enter-from .modal-container,
-.modal-leave-to .modal-container {
-  transform: scale(0.95);
-}
-
-/* Responsive */
 @media (max-width: 768px) {
-  .modal-container {
-    width: 95%;
-    max-height: 85vh;
-  }
-  
-  .modal-header {
-    padding: 1rem 1.25rem;
-  }
-  
-  .header-left {
-    flex-wrap: wrap;
-    gap: 0.75rem;
-  }
-  
-  .modal-header h3 {
-    font-size: 1rem;
-  }
-  
-  .modal-body {
-    padding: 1rem;
-  }
-  
-  .info-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .info-section {
-    padding: 1rem;
-  }
+  .modal-container { width: 95%; max-height: 85vh; }
+  .modal-header { padding: 1rem 1.25rem; }
+  .header-left { flex-wrap: wrap; gap: 0.75rem; }
+  .modal-header h3 { font-size: 1rem; }
+  .modal-body { padding: 1rem; }
+  .info-grid { grid-template-columns: 1fr; }
+  .info-section { padding: 1rem; }
 }
 </style>

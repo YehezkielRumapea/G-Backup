@@ -173,6 +173,12 @@ function getJobName(log) {
   return 'Unknown';
 }
 
+function getTransferredBytes(log) {
+  if (!log) return 0;
+  // Cek prioritas nama field (sesuaikan dengan JSON response backend Anda)
+  return log.transferred_bytes || log.TransferredBytes || log.TransferredByte || log.transferredByte || 0;
+}
+
 function getStatusClass(status) {
   const s = status.toUpperCase();
   if (['SUCCESS', 'COMPLETED'].includes(s)) return 'success';

@@ -302,8 +302,10 @@ func (s *backupServiceImpl) buildRcloneArgs(job models.ScheduledJob, runtimeDest
 		Destination,
 		"--checksum",
 		"--no-traverse",
-		"--stats", "0", // 1. Hanya print statistik SATU KALI saat selesai
-		"--stats-log-level", "NOTICE",
+		"--progress",    // ✅ TAMBAHAN: Tampilkan progress dengan stats
+		"--stats", "5s", // ✅ UPDATE: Print stats setiap 5 detik (bukan 0)
+		"--stats-log-level", "INFO", // ✅ UPDATE: Change to INFO level
+		"--human-readable",
 	}
 
 	return args
@@ -313,16 +315,21 @@ func (s *backupServiceImpl) buildRcloneArgs(job models.ScheduledJob, runtimeDest
 func (s *backupServiceImpl) handleJobCompletion(job models.ScheduledJob, result RcloneResult, status string) {
 	LogMutex.Lock()
 	defer LogMutex.Unlock()
+	stats := parseRcloneStats(result.Output)
+	logMessage := result.ErrorMsg
 
-	// 1. Catat ke tabel Logs
+	// 1. Catat ke tabel Logs (dengan TransferredBytes yang sudah di-parse)
 	newLog := &models.Log{
 		JobID:            &job.ID,
 		Status:           status,
-		Message:          result.Output + result.ErrorMsg,
+		Message:          logMessage,
 		DurationSec:      int(result.Duration.Seconds()),
-		TransferredBytes: result.TransferredBytes,
+		TransferredBytes: result.TransferredBytes, // ✅ UPDATED: dari parsed bytes
 		Timestamp:        time.Now(),
 	}
+
+	fmt.Printf("[LOG DEBUG] Saving ID: %d | Status: %s | Bytes: %d\n", job.ID, status, result.TransferredBytes)
+
 	s.LogRepo.CreateLog(newLog)
 
 	// 2. Update status akhir di tabel scheduled_jobs
@@ -332,11 +339,21 @@ func (s *backupServiceImpl) handleJobCompletion(job models.ScheduledJob, result 
 	}
 
 	if job.ScheduleCron == "" {
-		// Status PENDING/IDLE cocok untuk menunggu trigger manual berikutnya
-		dbStatus = "PENDING" // Atau "IDLE", tergantung konvensi Anda
+		dbStatus = "PENDING"
 	}
 
 	s.JobRepo.UpdateLastRunStatus(job.ID, time.Now(), dbStatus)
+
+	// ✅ TAMBAHAN: Log ringkasan
+	if status == "SUCCESS" {
+		fmt.Printf("✅ [COMPLETE] Job %d: Transferred %.2f GB in %d seconds (Speed: %s)\n",
+			job.ID,
+			result.Duration,
+			stats.Speed,
+		)
+	} else {
+		fmt.Printf("❌ [FAILED] Job %d: %s\n", job.ID, status)
+	}
 }
 
 func (s *backupServiceImpl) CalculateSourceSizeGB(path string) (float64, error) {

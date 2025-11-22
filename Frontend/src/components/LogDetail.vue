@@ -3,24 +3,21 @@
     <Transition name="modal">
       <div v-if="isVisible && log" class="modal-overlay" @click.self="handleClose">
         <div class="modal-container">
-          <!-- Header -->
           <div class="modal-header">
             <div class="header-left">
               <h3>Log Details</h3>
-              <span class="log-id">ID: {{ log.ID }}</span>
+              <span class="log-id">ID: {{ log.id || log.ID }}</span>
             </div>
             <button @click="handleClose" class="close-btn">×</button>
           </div>
 
-          <!-- Content -->
           <div class="modal-body">
-            <!-- Job Info -->
             <div class="info-section">
               <h4>Job Information</h4>
               <div class="info-grid">
                 <div class="info-item">
                   <span class="label">Object</span>
-                  <span class="value">{{ jobObject.sourcePath || 'Manual Job' }}</span>
+                  <span class="value">{{ getSourceObject(log) }}</span>
                 </div>
                 <div class="info-item">
                   <span class="label">Job Name</span>
@@ -29,44 +26,43 @@
                 <div class="info-item">
                   <span class="label">Status</span>
                   <span class="value">
-                    <span class="status-badge" :class="getStatusClass(log.Status)">
-                      {{ log.Status }}
+                    <span class="status-badge" :class="getStatusClass(log.status || log.Status)">
+                      {{ log.status || log.Status }}
                     </span>
                   </span>
                 </div>
                 <div class="info-item">
                   <span class="label">Duration</span>
-                  <span class="value">{{ log.DurationSec }} seconds</span>
+                  <span class="value">{{ log.duration_sec || log.DurationSec || 0 }} seconds</span>
                 </div>
+                
                 <div class="info-item">
-                  <span class="label">Transferred Byte</span>
-                  <span class="value">{{ formatFileSize(log.TransferredByte) }}</span>
+                  <span class="label">Transferred Size</span>
+                  <span class="value">{{ formatFileSize(log.transferred_bytes || log.TransferredBytes) }}</span>
                 </div>
+
                 <div class="info-item">
                   <span class="label">Timestamp</span>
-                  <span class="value">{{ formatFullTimestamp(log.Timestamp) }}</span>
+                  <span class="value">{{ formatFullTimestamp(log.timestamp || log.Timestamp) }}</span>
                 </div>
               </div>
             </div>
 
-            <!-- Output Message -->
             <div class="info-section">
               <h4>Output Message</h4>
               <div class="output-box">
-                <pre>{{ log.Message || 'No message available' }}</pre>
+                <pre>{{ log.message || log.Message || 'No message available' }}</pre>
               </div>
             </div>
 
-            <!-- Config Snapshot (if manual job) -->
-            <div v-if="log.ConfigSnapshot" class="info-section">
+            <div v-if="log.config_snapshot || log.ConfigSnapshot" class="info-section">
               <h4>Configuration Snapshot</h4>
               <div class="config-box">
-                <pre>{{ formatJSON(log.ConfigSnapshot) }}</pre>
+                <pre>{{ formatJSON(log.config_snapshot || log.ConfigSnapshot) }}</pre>
               </div>
             </div>
           </div>
 
-          <!-- Footer -->
           <div class="modal-footer">
             <button @click="handleClose" class="btn-close">Close</button>
           </div>
@@ -86,36 +82,44 @@ const props = defineProps({
 
 const emit = defineEmits(['close']);
 
-// Computed property untuk JobObject yang berisi sourcePath dan transferredByte
-const jobObject = computed(() => {
-  if (!props.log) return {};
-  
-  return {
-    sourcePath: props.log.ScheduledJob?.SourcePath || extractSourcePath(),
-    transferredByte: props.log.TransferredByte || 0
-  };
-});
-
-function extractSourcePath() {
-  if (!props.log?.ConfigSnapshot) return null;
-  try {
-    const config = JSON.parse(props.log.ConfigSnapshot);
-    return config.source_path || config.sourcePath || null;
-  } catch (e) {
-    return null;
-  }
-}
-
 function handleClose() {
   emit('close');
 }
 
-function getJobName(log) {
-  if (log.ScheduledJob?.JobName) return log.ScheduledJob.JobName;
-  if (log.ConfigSnapshot) {
+// Helper untuk mendapatkan source path dari berbagai kemungkinan struktur data
+function getSourceObject(log) {
+  // 1. Cek dari relasi ScheduledJob
+  if (log.scheduled_job?.source_path) return log.scheduled_job.source_path;
+  if (log.ScheduledJob?.SourcePath) return log.ScheduledJob.SourcePath;
+
+  // 2. Cek dari ConfigSnapshot (Manual Job)
+  const snapshot = log.config_snapshot || log.ConfigSnapshot;
+  if (snapshot) {
     try {
-      const config = JSON.parse(log.ConfigSnapshot);
-      return config.job_name || 'Manual Job';
+      // Handle jika snapshot masih berupa JSON string atau sudah object
+      const config = typeof snapshot === 'string' ? JSON.parse(snapshot) : snapshot;
+      return config.source_path || config.SourcePath || 'Manual Job';
+    } catch (e) {
+      return 'Manual Job';
+    }
+  }
+  return '-';
+}
+
+function getJobName(log) {
+  // Cek field ScheduledJob (camelCase atau PascalCase)
+  if (log.scheduled_job?.job_name) return log.scheduled_job.job_name;
+  if (log.ScheduledJob?.JobName) return log.ScheduledJob.JobName;
+  
+  // Cek field langsung di log (jika ada denormalisasi)
+  if (log.job_name) return log.job_name;
+
+  // Cek snapshot
+  const snapshot = log.config_snapshot || log.ConfigSnapshot;
+  if (snapshot) {
+    try {
+      const config = typeof snapshot === 'string' ? JSON.parse(snapshot) : snapshot;
+      return config.job_name || config.JobName || 'Manual Job';
     } catch (e) {
       return 'Manual Job';
     }
@@ -124,6 +128,7 @@ function getJobName(log) {
 }
 
 function getStatusClass(status) {
+  if (!status) return 'status-default';
   const s = status.toUpperCase();
   if (['SUCCESS', 'COMPLETED'].includes(s)) return 'status-success';
   if (s.includes('FAIL') || s === 'ERROR') return 'status-failed';
@@ -132,33 +137,43 @@ function getStatusClass(status) {
 }
 
 function formatFullTimestamp(timestamp) {
+  if (!timestamp) return '-';
   try {
-    return new Date(timestamp).toLocaleString('id-ID');
+    return new Date(timestamp).toLocaleString('id-ID', {
+      dateStyle: 'medium',
+      timeStyle: 'medium'
+    });
   } catch (e) {
     return timestamp;
   }
 }
 
 function formatFileSize(bytes) {
-  if (!bytes || bytes === 0) return '0 B';
+  // Konversi ke number untuk memastikan keamanan
+  const size = Number(bytes);
+  if (!size || size === 0 || isNaN(size)) return '0 B';
   
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   const k = 1024;
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  const i = Math.floor(Math.log(size) / Math.log(k));
   
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + units[i];
+  return parseFloat((size / Math.pow(k, i)).toFixed(2)) + ' ' + units[i];
 }
 
-function formatJSON(jsonString) {
+function formatJSON(jsonInput) {
+  if (!jsonInput) return '';
   try {
-    return JSON.stringify(JSON.parse(jsonString), null, 2);
+    // Jika input sudah object, stringify langsung. Jika string, parse dulu.
+    const obj = typeof jsonInput === 'string' ? JSON.parse(jsonInput) : jsonInput;
+    return JSON.stringify(obj, null, 2);
   } catch (e) {
-    return jsonString;
+    return jsonInput;
   }
 }
 </script>
 
 <style scoped>
+/* Style tetap sama seperti sebelumnya */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -166,6 +181,7 @@ function formatJSON(jsonString) {
   width: 100%;
   height: 100%;
   background-color: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px); /* Tambahan efek blur */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -174,55 +190,67 @@ function formatJSON(jsonString) {
 
 .modal-container {
   background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  border-radius: 12px; /* Radius lebih besar */
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
   max-width: 800px;
   width: 90%;
   max-height: 85vh;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem;
-  border-bottom: 1px solid #e5e5e5;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid #f3f4f6;
+  background: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .header-left {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 1rem;
 }
 
 .header-left h3 {
   margin: 0;
   font-size: 1.25rem;
-  color: #1a1a1a;
+  color: #111827;
+  font-weight: 600;
 }
 
 .log-id {
-  font-size: 0.85rem;
-  color: #999;
-  font-weight: 500;
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-family: monospace;
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 
 .close-btn {
   background: none;
   border: none;
   font-size: 1.5rem;
-  color: #999;
+  color: #9ca3af;
   cursor: pointer;
   transition: color 0.2s;
+  line-height: 1;
 }
 
 .close-btn:hover {
-  color: #1a1a1a;
+  color: #ef4444;
 }
 
 .modal-body {
   padding: 1.5rem;
+  overflow-y: auto;
 }
 
 .info-section {
@@ -231,113 +259,107 @@ function formatJSON(jsonString) {
 
 .info-section h4 {
   margin: 0 0 1rem 0;
-  font-size: 1rem;
-  color: #1a1a1a;
-  font-weight: 600;
-}
-
-.info-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1rem;
-}
-
-.info-item {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.label {
-  font-size: 0.75rem;
-  color: #999;
+  font-size: 0.95rem;
+  color: #374151;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
-.value {
-  font-size: 0.9rem;
-  color: #1a1a1a;
-  font-weight: 500;
-  word-break: break-word;
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  background: #f9fafb;
+  padding: 1.25rem;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
 }
 
-.status-badge {
-  display: inline-block;
-  padding: 0.25rem 0.75rem;
-  border-radius: 4px;
-  font-size: 0.8rem;
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.label {
+  font-size: 0.75rem;
+  color: #6b7280;
   font-weight: 600;
-  width: fit-content;
+  text-transform: uppercase;
 }
 
-.status-success {
-  background-color: #d4edda;
-  color: #155724;
+.value {
+  font-size: 0.9375rem;
+  color: #111827;
+  font-weight: 500;
+  word-break: break-all;
 }
 
-.status-failed {
-  background-color: #f8d7da;
-  color: #721c24;
+/* Status Badges */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
-.status-running {
-  background-color: #d1ecf1;
-  color: #0c5460;
-}
+.status-success { background-color: #ecfdf5; color: #047857; }
+.status-failed { background-color: #fef2f2; color: #b91c1c; }
+.status-running { background-color: #eff6ff; color: #1d4ed8; }
+.status-default { background-color: #f3f4f6; color: #374151; }
 
-.status-default {
-  background-color: #e2e3e5;
-  color: #383d41;
-}
-
+/* Code Boxes */
 .output-box,
 .config-box {
-  background-color: #f8f9fa;
-  border: 1px solid #e5e5e5;
-  border-radius: 6px;
+  background-color: #1f2937; /* Dark mode for logs looks better */
+  border-radius: 8px;
   padding: 1rem;
   overflow-x: auto;
+  border: 1px solid #374151;
 }
 
 .output-box pre,
 .config-box pre {
   margin: 0;
-  font-family: 'Courier New', monospace;
+  font-family: 'Consolas', 'Monaco', monospace;
   font-size: 0.85rem;
-  color: #1a1a1a;
-  line-height: 1.5;
+  color: #e5e7eb;
+  line-height: 1.6;
   white-space: pre-wrap;
   word-wrap: break-word;
 }
 
 .modal-footer {
   padding: 1rem 1.5rem;
-  border-top: 1px solid #e5e5e5;
+  border-top: 1px solid #f3f4f6;
   display: flex;
   justify-content: flex-end;
+  background: #fff;
 }
 
 .btn-close {
-  padding: 0.5rem 1rem;
-  background-color: #f5f5f5;
-  border: 1px solid #e5e5e5;
-  border-radius: 4px;
+  padding: 0.625rem 1.25rem;
+  background-color: white;
+  border: 1px solid #d1d5db;
+  color: #374151;
+  border-radius: 6px;
   cursor: pointer;
   font-weight: 500;
   transition: all 0.2s;
 }
 
 .btn-close:hover {
-  background-color: #e5e5e5;
-  border-color: #999;
+  background-color: #f3f4f6;
+  border-color: #9ca3af;
 }
 
-/* Modal animations */
+/* Transitions */
 .modal-enter-active,
 .modal-leave-active {
-  transition: opacity 0.3s ease;
+  transition: opacity 0.2s ease;
 }
 
 .modal-enter-from,
@@ -345,23 +367,17 @@ function formatJSON(jsonString) {
   opacity: 0;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 640px) {
   .modal-container {
-    width: 95%;
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0;
   }
-
+  
   .info-grid {
     grid-template-columns: 1fr;
-  }
-
-  .modal-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
-  }
-
-  .close-btn {
-    align-self: flex-end;
+    gap: 1rem;
   }
 }
 </style>
