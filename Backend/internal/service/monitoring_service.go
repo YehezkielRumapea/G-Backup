@@ -14,6 +14,7 @@ type MonitoringService interface {
 	GetRemoteStatusList() ([]models.Monitoring, error)
 	GetRcloneConfiguredRemotes() ([]string, error)
 	GetJobLogs() ([]models.Log, error)
+	GetAllJobs() ([]models.ScheduledJob, error)
 	DiscoverAndSaveRemote() error
 	RunRemoteChecks() error
 	StartMonitoringDaemon()
@@ -47,6 +48,10 @@ func (s *monitoringServiceImpl) UpdateRemoteStatus(remoteName string) error {
 		LastCheckedAt: time.Now(),
 	}
 
+	// ============================================================
+	// ✅ Hitung semua job (scheduled + manual) ke remote ini
+	// EXCLUDE: restore one-shot jobs
+	// ============================================================
 	count, errJob := s.JobRepo.CountJobOnRemote(remoteName)
 	if errJob != nil {
 		fmt.Printf("⚠️ Gagal hitung job pada %s: %v\n", remoteName, errJob)
@@ -55,13 +60,9 @@ func (s *monitoringServiceImpl) UpdateRemoteStatus(remoteName string) error {
 		monitor.ActiveJobCount = count
 	}
 
-	// Di dalam UpdateRemoteStatus (blok if !result.Success)
-
 	if !result.Success {
 		fmt.Printf("❌ Rclone Error pada %s: %s\n", remoteName, result.ErrorMsg)
 		monitor.StatusConnect = "DISCONNECTED"
-
-		// PERBAIKAN: Hapus '&' agar tipenya string (value), bukan *string (pointer)
 		monitor.SystemMessage = result.ErrorMsg
 
 		s.MonitorRepo.UpsertRemoteStatus(monitor)
@@ -96,8 +97,8 @@ func (s *monitoringServiceImpl) UpdateRemoteStatus(remoteName string) error {
 		monitor.SystemMessage = ""
 	}
 
-	fmt.Printf("✅ %s: %.2f GB / %.2f GB (%.1f%%)\n",
-		remoteName, monitor.UsedStorageGB, monitor.TotalStorageGB, usedPercentage)
+	fmt.Printf("✅ %s: %.2f GB / %.2f GB (%.1f%%) | %d active jobs\n",
+		remoteName, monitor.UsedStorageGB, monitor.TotalStorageGB, usedPercentage, monitor.ActiveJobCount)
 
 	return s.MonitorRepo.UpsertRemoteStatus(monitor)
 }
@@ -108,6 +109,7 @@ func (s *monitoringServiceImpl) GetRemoteStatusList() ([]models.Monitoring, erro
 		return nil, err
 	}
 
+	// Hitung job count untuk setiap remote
 	for i := range remotes {
 		count, _ := s.JobRepo.CountJobOnRemote(remotes[i].RemoteName)
 		remotes[i].ActiveJobCount = count
@@ -295,4 +297,8 @@ func findMissingRemotes(sourceList, targetList []string) []string {
 	}
 
 	return missing
+}
+
+func (s *monitoringServiceImpl) GetAllJobs() ([]models.ScheduledJob, error) {
+	return s.JobRepo.FindAllJobs() // Semua job aktif
 }

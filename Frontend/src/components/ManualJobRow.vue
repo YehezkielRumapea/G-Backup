@@ -24,8 +24,9 @@
           ▶
         </button>
 
-        <!-- Edit Button -->
+        <!-- Edit Button - HIDDEN untuk RESTORE -->
         <button 
+          v-if="job.operation_mode != 'RESTORE'"
           @click="$emit('edit', job.id)" 
           class="action-btn edit" 
           title="Edit Job"
@@ -33,8 +34,9 @@
           ✎
         </button>
 
-        <!-- View Script Button -->
+        <!-- View Script Button - HIDDEN untuk RESTORE -->
         <button 
+          v-if="job.operation_mode != 'RESTORE'"
           @click="$emit('view-script', job.id)" 
           class="action-btn view" 
           title="View Script"
@@ -66,7 +68,8 @@ const props = defineProps({
 const emit = defineEmits(['trigger', 'view-script', 'edit', 'delete']);
 
 function handleDelete() {
-  if (!confirm(`Apakah Anda yakin ingin menghapus job manual "${props.job.job_name}"?\nAksi ini tidak dapat dibatalkan.`)) {
+  const jobType = props.job.operation_mode === 'RESTORE' ? 'restore' : 'job manual';
+  if (!confirm(`Apakah Anda yakin ingin menghapus ${jobType} "${props.job.job_name}"?\nAksi ini tidak dapat dibatalkan.`)) {
     return;
   }
   emit('delete', props.job.id, props.job.job_name);

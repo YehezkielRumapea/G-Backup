@@ -137,14 +137,6 @@ func main() {
 		SigningKey: []byte(jwtSecretKey),
 	})) // Menerapkan Middleware JWT
 
-	// Authentication Endpoints (Catatan: Ini sudah di bawah JWT, hanya bisa diakses setelah login)
-	// Jika Anda ingin user bisa menggunakan setupHandler.Login (ya	ng biasanya dipakai untuk register)
-	// pada rute ini setelah setup selesai, pastikan Anda menggunakan authHandler.Login di sini,
-	// atau pindahkan semua rute Auth ke public/r.
-	// Saat ini authHandler.Login sudah ada di atas (publik), jadi rute ini di bawah JWT tidak efisien.
-	// authGroup := r.Group("/auth")
-	// authGroup.POST("/login", setupHandler.Login) // Hapus atau ganti dengan r.POST("/auth/login", authHandler.Login) jika perlu
-
 	// Rute Monitoring dan Logs
 	r.GET("/monitoring/remotes", monitorHandler.GetRemoteStatusList)
 	r.GET("/monitoring/logs", monitorHandler.GetJobLogs)
@@ -158,6 +150,7 @@ func main() {
 	r.DELETE("/jobs/delete/:id", jobHandler.DeleteJob)
 	r.PUT("/jobs/update/:id", jobHandler.UpdateJob)
 	r.GET("/jobs/:id", jobHandler.GetJobByID)
+	r.GET("/jobs/alljobs", monitorHandler.GetAllJobs)
 
 	// Rute Aksi
 	r.POST("/jobs/new", backupHandler.CreateNewJob)        // Create Backup (Manual/Auto)

@@ -32,14 +32,15 @@
       <button @click="fetchData" class="retry-btn">Coba Lagi</button>
     </div>
 
-    <div v-if="!isLoading && jobs.length === 0 && !errorMessage" class="empty-state">
+    <!-- ✅ BACKUP JOBS SECTION -->
+    <div v-if="!isLoading && backupJobs.length === 0 && !errorMessage" class="empty-state">
       <p>Tidak ada template job manual yang ditemukan</p>
       <router-link to="/create" class="btn-create">
         Buat Job Baru
       </router-link>
     </div>
 
-    <div v-if="!isLoading && jobs.length > 0" class="table-container">
+    <div v-if="!isLoading && backupJobs.length > 0" class="table-container">
       <table class="jobs-table">
         <thead>
           <tr>
@@ -54,7 +55,7 @@
         </thead>
         <tbody>
           <ManualJobRow
-            v-for="job in jobs"
+            v-for="job in backupJobs"
             :key="job.id"
             :job="job"
             @trigger="handleTrigger"
@@ -64,6 +65,37 @@
           />
         </tbody>
       </table>
+    </div>
+
+    <!-- ✅ RESTORE JOBS SECTION -->
+    <div v-if="!isLoading && restoreJobs.length > 0" class="restore-section">
+      <h2 class="section-title">📥 Restore Jobs</h2>
+      <div class="table-container">
+        <table class="jobs-table">
+          <thead>
+            <tr>
+              <th>Nama Job</th>
+              <th>Object</th>
+              <th>GDrive</th>
+              <th>Last Run</th>
+              <th>Status</th>
+              <th>Next Run</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <ManualJobRow
+              v-for="job in restoreJobs"
+              :key="job.id"
+              :job="job"
+              @trigger="handleTrigger"
+              @view-script="handleViewScript"
+              @edit="handleEdit"
+              @delete="handleDelete"
+            />
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <!-- ✅ Toast Notification -->
@@ -91,7 +123,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import jobService from '@/services/jobService';
 import ManualJobRow from '@/components/ManualJobRow.vue';
 import ScriptPreview from '@/components/ScriptPreview.vue';
@@ -112,6 +144,15 @@ const toast = ref({
   show: false,
   message: '',
   type: 'success',
+});
+
+// ✅ Computed properties untuk filter BACKUP vs RESTORE
+const backupJobs = computed(() => {
+  return jobs.value.filter(job => job.operation_mode !== 'RESTORE');
+});
+
+const restoreJobs = computed(() => {
+  return jobs.value.filter(job => job.operation_mode === 'RESTORE');
 });
 
 async function fetchData() {
@@ -164,6 +205,8 @@ async function handleDelete(jobId, jobName) {
   }
 }
 
+/*************  ✨ Windsurf Command ⭐  *************/
+/*******  5cdcc004-fb80-4af4-a922-c1b4949aeb56  *******/
 async function handleTrigger(jobId) {
   if (!confirm(`Apakah Anda yakin ingin menjalankan job manual ID ${jobId} sekarang?`)) {
     return;
@@ -245,6 +288,19 @@ h1 {
   color: #666;
   margin: 0;
   font-weight: 400;
+}
+
+.section-title {
+  font-size: 1.25rem;
+  font-weight: bold;
+  color: #1a1a1a;
+  margin: 2rem 0 1rem 0;
+  padding-top: 1.5rem;
+  border-top: 2px solid #e5e5e5;
+}
+
+.restore-section {
+  margin-top: 2rem;
 }
 
 .status-message {
@@ -459,6 +515,10 @@ h1 {
   h1 {
     font-size: 1.5rem;
     font-weight: bold;
+  }
+  
+  .section-title {
+    font-size: 1.1rem;
   }
   
   .table-container {

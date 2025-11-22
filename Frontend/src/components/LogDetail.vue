@@ -86,42 +86,47 @@ function handleClose() {
   emit('close');
 }
 
-// Helper untuk mendapatkan source path dari berbagai kemungkinan struktur data
+// ✅ Helper untuk mendapatkan source path
 function getSourceObject(log) {
-  // 1. Cek dari relasi ScheduledJob
+  // 1. PRIORITAS UTAMA: Cek dari field baru di logs table
+  if (log.source_path) return log.source_path;
+  if (log.SourcePath) return log.SourcePath;
+
+  // 2. Fallback: Cek dari relasi ScheduledJob
   if (log.scheduled_job?.source_path) return log.scheduled_job.source_path;
   if (log.ScheduledJob?.SourcePath) return log.ScheduledJob.SourcePath;
 
-  // 2. Cek dari ConfigSnapshot (Manual Job)
+  // 3. Fallback: Cek dari ConfigSnapshot (backup lama)
   const snapshot = log.config_snapshot || log.ConfigSnapshot;
   if (snapshot) {
     try {
-      // Handle jika snapshot masih berupa JSON string atau sudah object
       const config = typeof snapshot === 'string' ? JSON.parse(snapshot) : snapshot;
-      return config.source_path || config.SourcePath || 'Manual Job';
+      return config.source_path || config.SourcePath || '-';
     } catch (e) {
-      return 'Manual Job';
+      return '-';
     }
   }
   return '-';
 }
 
+// ✅ Helper untuk mendapatkan job name
 function getJobName(log) {
-  // Cek field ScheduledJob (camelCase atau PascalCase)
+  // 1. PRIORITAS UTAMA: Cek dari field baru di logs table
+  if (log.job_name) return log.job_name;
+  if (log.JobName) return log.JobName;
+
+  // 2. Fallback: Cek dari relasi ScheduledJob
   if (log.scheduled_job?.job_name) return log.scheduled_job.job_name;
   if (log.ScheduledJob?.JobName) return log.ScheduledJob.JobName;
-  
-  // Cek field langsung di log (jika ada denormalisasi)
-  if (log.job_name) return log.job_name;
 
-  // Cek snapshot
+  // 3. Fallback: Cek dari ConfigSnapshot (backup lama)
   const snapshot = log.config_snapshot || log.ConfigSnapshot;
   if (snapshot) {
     try {
       const config = typeof snapshot === 'string' ? JSON.parse(snapshot) : snapshot;
-      return config.job_name || config.JobName || 'Manual Job';
+      return config.job_name || config.JobName || 'Unknown Job';
     } catch (e) {
-      return 'Manual Job';
+      return 'Unknown Job';
     }
   }
   return 'Unknown Job';
@@ -173,7 +178,6 @@ function formatJSON(jsonInput) {
 </script>
 
 <style scoped>
-/* Style tetap sama seperti sebelumnya */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -181,7 +185,7 @@ function formatJSON(jsonInput) {
   width: 100%;
   height: 100%;
   background-color: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(2px); /* Tambahan efek blur */
+  backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -190,7 +194,7 @@ function formatJSON(jsonInput) {
 
 .modal-container {
   background-color: white;
-  border-radius: 12px; /* Radius lebih besar */
+  border-radius: 12px;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
   max-width: 800px;
   width: 90%;
@@ -296,7 +300,6 @@ function formatJSON(jsonInput) {
   word-break: break-all;
 }
 
-/* Status Badges */
 .status-badge {
   display: inline-flex;
   align-items: center;
@@ -311,10 +314,9 @@ function formatJSON(jsonInput) {
 .status-running { background-color: #eff6ff; color: #1d4ed8; }
 .status-default { background-color: #f3f4f6; color: #374151; }
 
-/* Code Boxes */
 .output-box,
 .config-box {
-  background-color: #1f2937; /* Dark mode for logs looks better */
+  background-color: #1f2937;
   border-radius: 8px;
   padding: 1rem;
   overflow-x: auto;
@@ -356,7 +358,6 @@ function formatJSON(jsonInput) {
   border-color: #9ca3af;
 }
 
-/* Transitions */
 .modal-enter-active,
 .modal-leave-active {
   transition: opacity 0.2s ease;

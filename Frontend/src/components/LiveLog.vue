@@ -91,6 +91,9 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import monitoringService from '@/services/monitoringService';
 import SimpleLogModal from './LogModel.vue';
 
+// ============================================================
+// STATE
+// ============================================================
 const logs = ref([]);
 const isLoading = ref(true);
 const isRefreshing = ref(false);
@@ -100,20 +103,25 @@ const selectedLog = ref(null);
 
 let refreshInterval = null;
 
-// Stats
+// ============================================================
+// COMPUTED
+// ============================================================
 const successCount = computed(() => {
   return logs.value.filter(l => 
-    ['SUCCESS', 'COMPLETED'].includes(l.Status.toUpperCase())
+    ['SUCCESS', 'COMPLETED'].includes((l.Status || '').toUpperCase())
   ).length;
 });
 
 const failedCount = computed(() => {
   return logs.value.filter(l => 
-    l.Status.toUpperCase().includes('FAIL') || l.Status.toUpperCase() === 'ERROR'
+    (l.Status || '').toUpperCase().includes('FAIL') || 
+    (l.Status || '').toUpperCase() === 'ERROR'
   ).length;
 });
 
-// Fetch logs
+// ============================================================
+// METHODS: FETCH DATA
+// ============================================================
 async function fetchLogs() {
   if (isRefreshing.value) return;
   
@@ -123,20 +131,22 @@ async function fetchLogs() {
   try {
     const data = await monitoringService.getLogs();
     
-    // Take latest 20 logs
+    // Sort by timestamp (newest first) dan ambil 20 terakhir
     logs.value = (Array.isArray(data) ? data : [])
       .sort((a, b) => new Date(b.Timestamp) - new Date(a.Timestamp))
       .slice(0, 20);
   } catch (err) {
     console.error('Failed to fetch logs:', err);
-    error.value = 'Failed to load';
+    error.value = 'Failed to load logs';
   } finally {
     isLoading.value = false;
     isRefreshing.value = false;
   }
 }
 
-// Auto refresh every 10 seconds
+// ============================================================
+// METHODS: AUTO REFRESH
+// ============================================================
 function startAutoRefresh() {
   refreshInterval = setInterval(fetchLogs, 10000);
 }
@@ -148,7 +158,9 @@ function stopAutoRefresh() {
   }
 }
 
-// View detail
+// ============================================================
+// METHODS: MODAL
+// ============================================================
 function viewDetail(log) {
   selectedLog.value = log;
   showModal.value = true;
@@ -159,42 +171,77 @@ function closeModal() {
   selectedLog.value = null;
 }
 
-// Helper functions
+// ============================================================
+// HELPERS: DATA EXTRACTION
+// ============================================================
+
+/**
+ * ✅ Get Job Name dengan prioritas:
+ * 1. Field baru di logs table (JobName/job_name)
+ * 2. Relasi ScheduledJob (untuk backup job)
+ * 3. ConfigSnapshot (untuk manual job lama)
+ */
 function getJobName(log) {
+  if (!log) return 'Unknown';
+
+  // 1. PRIORITAS: Cek dari field baru di logs table
+  if (log.JobName) return log.JobName;
+  if (log.job_name) return log.job_name;
+
+  // 2. Fallback: Cek dari relasi ScheduledJob
   if (log.ScheduledJob?.JobName) return log.ScheduledJob.JobName;
+  if (log.scheduled_job?.job_name) return log.scheduled_job.job_name;
+
+  // 3. Fallback: Cek dari ConfigSnapshot
   if (log.ConfigSnapshot) {
     try {
-      const config = JSON.parse(log.ConfigSnapshot);
-      return config.job_name || 'Manual Job';
+      const config = typeof log.ConfigSnapshot === 'string' 
+        ? JSON.parse(log.ConfigSnapshot) 
+        : log.ConfigSnapshot;
+      return config.job_name || config.JobName || 'Manual Job';
     } catch (e) {
       return 'Manual Job';
     }
   }
+
   return 'Unknown';
 }
 
-function getTransferredBytes(log) {
-  if (!log) return 0;
-  // Cek prioritas nama field (sesuaikan dengan JSON response backend Anda)
-  return log.transferred_bytes || log.TransferredBytes || log.TransferredByte || log.transferredByte || 0;
-}
-
+/**
+ * Get Status Class untuk styling
+ */
 function getStatusClass(status) {
+  if (!status) return 'pending';
+  
   const s = status.toUpperCase();
   if (['SUCCESS', 'COMPLETED'].includes(s)) return 'success';
   if (s.includes('FAIL') || s === 'ERROR') return 'failed';
   if (s === 'RUNNING') return 'running';
+  
   return 'pending';
 }
 
+// ============================================================
+// HELPERS: FORMATTING
+// ============================================================
+
+/**
+ * Format duration dalam format readable
+ */
 function formatDuration(seconds) {
-  if (!seconds) return '-';
+  if (!seconds || seconds === 0) return '-';
+  
   if (seconds < 60) return `${seconds}s`;
+  
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
+  
   return `${m}m ${s}s`;
 }
 
+/**
+ * Format timestamp dalam format relative time
+ */
 function formatTime(timestamp) {
   if (!timestamp) return '-';
   
@@ -203,10 +250,16 @@ function formatTime(timestamp) {
     const now = new Date();
     const diff = now - date;
     
+    // Less than 1 minute
     if (diff < 60000) return 'Just now';
+    
+    // Less than 1 hour
     if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+    
+    // Less than 1 day
     if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
     
+    // More than 1 day
     return date.toLocaleString('id-ID', { 
       month: 'short',
       day: 'numeric',
@@ -218,7 +271,9 @@ function formatTime(timestamp) {
   }
 }
 
-// Lifecycle
+// ============================================================
+// LIFECYCLE
+// ============================================================
 onMounted(() => {
   fetchLogs();
   startAutoRefresh();
@@ -230,6 +285,9 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* ============================================================ */
+/* LAYOUT UTAMA */
+/* ============================================================ */
 .live-log-panel {
   background: white;
   border: 1px solid #e5e5e5;
@@ -240,7 +298,9 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-/* Header */
+/* ============================================================ */
+/* HEADER */
+/* ============================================================ */
 .panel-header {
   background: #fafafa;
   padding: 1rem 1.25rem;
@@ -287,7 +347,9 @@ onUnmounted(() => {
   to { transform: rotate(360deg); }
 }
 
-/* Stats Bar */
+/* ============================================================ */
+/* STATS BAR */
+/* ============================================================ */
 .stats-bar {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -333,7 +395,9 @@ onUnmounted(() => {
   margin-top: 0.25rem;
 }
 
-/* Status Message */
+/* ============================================================ */
+/* STATUS MESSAGES */
+/* ============================================================ */
 .status-message {
   padding: 1.5rem 1.25rem;
   display: flex;
@@ -379,19 +443,9 @@ onUnmounted(() => {
   color: white;
 }
 
-/* Empty State */
-.empty-state {
-  text-align: center;
-  padding: 2rem 1rem;
-}
-
-.empty-state p {
-  margin: 0;
-  color: #999;
-  font-size: 0.875rem;
-}
-
-/* Logs List */
+/* ============================================================ */
+/* LOGS LIST */
+/* ============================================================ */
 .logs-list {
   flex: 1;
   overflow-y: auto;
@@ -415,7 +469,23 @@ onUnmounted(() => {
   background: #a3a3a3;
 }
 
-/* Log Item */
+/* ============================================================ */
+/* EMPTY STATE */
+/* ============================================================ */
+.empty-state {
+  text-align: center;
+  padding: 2rem 1rem;
+}
+
+.empty-state p {
+  margin: 0;
+  color: #999;
+  font-size: 0.875rem;
+}
+
+/* ============================================================ */
+/* LOG ITEM */
+/* ============================================================ */
 .log-item {
   display: flex;
   align-items: center;
@@ -452,12 +522,13 @@ onUnmounted(() => {
   border-left-color: #6b7280;
 }
 
-/* Log Status Indicator */
+/* ============================================================ */
+/* LOG STATUS INDICATOR */
+/* ============================================================ */
 .log-status {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: currentColor;
   flex-shrink: 0;
 }
 
@@ -477,7 +548,9 @@ onUnmounted(() => {
   background: #6b7280;
 }
 
-/* Log Info */
+/* ============================================================ */
+/* LOG INFO */
+/* ============================================================ */
 .log-info {
   flex: 1;
   min-width: 0;
@@ -505,7 +578,9 @@ onUnmounted(() => {
   color: #d4d4d4;
 }
 
-/* Detail Button */
+/* ============================================================ */
+/* DETAIL BUTTON */
+/* ============================================================ */
 .detail-btn {
   background: transparent;
   border: 1px solid #e5e5e5;
@@ -527,5 +602,32 @@ onUnmounted(() => {
   background: #f5f5f5;
   border-color: #1a1a1a;
   color: #1a1a1a;
+}
+
+/* ============================================================ */
+/* RESPONSIVE */
+/* ============================================================ */
+@media (max-width: 768px) {
+  .panel-header {
+    padding: 0.875rem 1rem;
+  }
+
+  .stats-bar {
+    padding: 0.875rem 1rem;
+    gap: 0.75rem;
+  }
+
+  .log-item {
+    padding: 0.625rem;
+    gap: 0.5rem;
+  }
+
+  .log-name {
+    font-size: 0.8125rem;
+  }
+
+  .log-meta {
+    font-size: 0.7rem;
+  }
 }
 </style>

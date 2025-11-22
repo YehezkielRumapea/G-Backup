@@ -61,17 +61,16 @@ const MinFreeGB = 1.0
 func (s *backupServiceImpl) CreateJobAndDispatch(job *models.ScheduledJob) error {
 
 	if job.OperationMode == "" {
-		// Karena default DB Anda adalah BACKUP, kita set di Go.
-		// Jika niatnya Restore, handler HARUS sudah menyetelnya.
 		job.OperationMode = "BACKUP"
 	}
-	// [END PERBAIKAN KRITIS]
-
-	// (Logika RcloneMode sudah diatasi di handler/service sebelumnya)
 	if job.RcloneMode == "" {
 		job.RcloneMode = "copy"
 	}
-
+	if job.OperationMode == "RESTORE" {
+		fmt.Printf("[DISPATCHER] 🔄 RESTORE Job: %s (One-Shot, TIDAK disimpan ke DB)\n", job.JobName)
+		go s.executeJobLifecycle(*job)
+		return nil
+	}
 	// 1. SELALU SIMPAN JOB KE DATABASE (sebagai Template)
 	if err := s.JobRepo.Create(job); err != nil {
 		return fmt.Errorf("gagal menyimpan job template: %w", err)
@@ -320,7 +319,9 @@ func (s *backupServiceImpl) handleJobCompletion(job models.ScheduledJob, result 
 
 	// 1. Catat ke tabel Logs (dengan TransferredBytes yang sudah di-parse)
 	newLog := &models.Log{
-		JobID:            &job.ID,
+		JobID:            nil,
+		JobName:          job.JobName,
+		SourcePath:       job.SourcePath,
 		Status:           status,
 		Message:          logMessage,
 		DurationSec:      int(result.Duration.Seconds()),
@@ -328,27 +329,32 @@ func (s *backupServiceImpl) handleJobCompletion(job models.ScheduledJob, result 
 		Timestamp:        time.Now(),
 	}
 
-	fmt.Printf("[LOG DEBUG] Saving ID: %d | Status: %s | Bytes: %d\n", job.ID, status, result.TransferredBytes)
+	if job.ID != 0 {
+		newLog.JobID = &job.ID
+	}
 
+	fmt.Printf("[LOG DEBUG] Saving ID: %d | Status: %s | Bytes: %d\n", job.ID, status, result.TransferredBytes)
 	s.LogRepo.CreateLog(newLog)
 
 	// 2. Update status akhir di tabel scheduled_jobs
-	dbStatus := status
-	if status == "SUCCESS" {
-		dbStatus = "COMPLETED"
+	if job.ID != 0 {
+		// 2. Update status akhir di tabel scheduled_jobs
+		dbStatus := status
+		if status == "SUCCESS" {
+			dbStatus = "COMPLETED"
+		}
+
+		if job.ScheduleCron == "" {
+			dbStatus = "PENDING"
+		}
+
+		s.JobRepo.UpdateLastRunStatus(job.ID, time.Now(), dbStatus)
 	}
-
-	if job.ScheduleCron == "" {
-		dbStatus = "PENDING"
-	}
-
-	s.JobRepo.UpdateLastRunStatus(job.ID, time.Now(), dbStatus)
-
 	// ✅ TAMBAHAN: Log ringkasan
 	if status == "SUCCESS" {
 		fmt.Printf("✅ [COMPLETE] Job %d: Transferred %.2f GB in %d seconds (Speed: %s)\n",
 			job.ID,
-			result.Duration,
+			float64(result.Duration)/1e9/1e9,
 			stats.Speed,
 		)
 	} else {

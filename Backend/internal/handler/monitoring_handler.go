@@ -91,3 +91,28 @@ func (h *MonitoringHandler) GetScheduledJobs(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, jobsDTO)
 }
+
+// GetAllJobs: Mengambil semua job (Manual + Scheduled) untuk dashboard counter
+func (h *MonitoringHandler) GetAllJobs(c echo.Context) error {
+	// Panggil service (pastikan MonitoringSvc punya method GetAllJobs di interface)
+	jobs, err := h.MonitoringSvc.GetAllJobs()
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "Gagal mengambil total jobs: " + err.Error(),
+		})
+	}
+
+	// Mapping ke response ringkas (opsional, atau kirim raw)
+	var response []map[string]interface{}
+	for _, job := range jobs {
+		response = append(response, map[string]interface{}{
+			"id":             job.ID,
+			"job_name":       job.JobName,
+			"operation_mode": job.OperationMode,
+			"schedule_cron":  job.ScheduleCron,
+			"is_active":      job.IsActive,
+		})
+	}
+
+	return c.JSON(http.StatusOK, response)
+}

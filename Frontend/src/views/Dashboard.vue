@@ -1,12 +1,10 @@
 <template>
   <div class="dashboard-container">
-    <!-- Page Header -->
     <div class="header">
       <h1>Dashboard</h1>
       <p class="subtitle">Overview sistem backup dan monitoring activity</p>
     </div>
 
-    <!-- Stats Cards with Storage Chart -->
     <div class="stats-section">
       <div class="stats-grid">
         <div class="stat-card">
@@ -24,7 +22,6 @@
         </div>
       </div>
 
-      <!-- Storage Chart Section -->
       <div class="storage-card">
         <div class="storage-header">
           <span class="storage-label">Total Disk Space</span>
@@ -46,7 +43,6 @@
       </div>
     </div>
 
-    <!-- Quick Action Section -->
     <div class="section">
       <h2>Quick Action</h2>
       <p class="section-subtitle">Start backup or restore job instantly</p>
@@ -70,7 +66,6 @@
       </div>
     </div>
 
-    <!-- Next Job Section -->
     <div class="section">
       <h2>Next Job</h2>
       
@@ -102,14 +97,12 @@
       </div>
     </div>
 
-    <!-- Backup Modal -->
     <QuickBackupModal
       :is-visible="showBackupModal"
       @close="showBackupModal = false"
       @success="handleBackupSuccess"
     />
 
-    <!-- Restore Modal -->
     <QuickRestoreModal
       :is-visible="showRestoreModal"
       @close="showRestoreModal = false"
@@ -124,10 +117,12 @@ import monitoringService from '@/services/monitoringService';
 import QuickBackupModal from '@/components/CreateBackup.vue';
 import QuickRestoreModal from '@/components/CreateRestore.vue';
 import StorageChart from '@/components/StorageChart.vue';
+import jobService from '../services/jobService';
 
 // State
 const remotes = ref([]);
-const jobs = ref([]);
+const allJobs = ref([]); // Untuk menampung semua job (Manual + Scheduled)
+const scheduledJobs = ref([]); // Khusus untuk logika Next Job
 const isLoadingData = ref(true);
 const isLoadingJobs = ref(true);
 const showBackupModal = ref(false);
@@ -136,7 +131,11 @@ const driveColors = new Map();
 
 // Computed
 const totalRemotes = computed(() => remotes.value.length);
-const totalJobs = computed(() => jobs.value.length);
+
+// Menghitung total job dari list allJobs, kecuali yang RESTORE
+const totalJobs = computed(() => {
+  return allJobs.value.filter(job => job.operation_mode !== 'RESTORE').length;
+});
 
 const totalStorageGB = computed(() => {
   const total = remotes.value.reduce((sum, remote) => {
@@ -193,20 +192,10 @@ const storageColors = computed(() => {
   return colors;
 });
 
-const driveBreakdown = computed(() => {
-  return remotes.value
-    .filter(remote => remote.status_connect === 'CONNECTED')
-    .map((remote, index) => ({
-      name: remote.remote_name,
-      size: `${(remote.used_storage_gb || 0).toFixed(2)} GB / ${(remote.total_storage_gb || 0).toFixed(2)} GB`,
-      color: getColorForDrive(remote.remote_name, index)
-    }));
-});
-
 const nextJob = computed(() => {
-  if (!Array.isArray(jobs.value) || jobs.value.length === 0) return null;
+  if (!Array.isArray(scheduledJobs.value) || scheduledJobs.value.length === 0) return null;
   
-  const futureJobs = jobs.value
+  const futureJobs = scheduledJobs.value
     .map(j => ({ ...j, nextRunDate: new Date(j.next_run) }))
     .filter(j => j.nextRunDate && j.nextRunDate > new Date())
     .sort((a, b) => a.nextRunDate - b.nextRunDate);
@@ -228,16 +217,8 @@ onMounted(async () => {
 
 // Functions
 const predefinedColors = [
-  '#66A5AD',
-  '#A0D468',
-  '#F68484',
-  '#B49FBC',
-  '#FDBE34',
-  '#7D9D9C',
-  '#D97F7F',
-  '#6A8EAE',
-  '#A29B7F',
-  '#CC9A78'
+  '#66A5AD', '#A0D468', '#F68484', '#B49FBC', '#FDBE34',
+  '#7D9D9C', '#D97F7F', '#6A8EAE', '#A29B7F', '#CC9A78'
 ];
 
 function hexToRgba(hex, alpha) {
@@ -259,15 +240,22 @@ async function fetchData() {
   isLoadingJobs.value = true;
   
   try {
-    const [remotesData, jobsData] = await Promise.all([
+    // Panggil 3 endpoint paralel: Remote, All Jobs, Scheduled Jobs
+    const [remotesData, allJobsData, scheduledJobsData] = await Promise.all([
       monitoringService.getRemoteStatus(),
+      jobService.getAllJobs(),
       monitoringService.getScheduledJobs()
     ]);
     
     remotes.value = Array.isArray(remotesData) ? remotesData : [];
-    jobs.value = Array.isArray(jobsData) ? jobsData : [];
+    allJobs.value = Array.isArray(allJobsData) ? allJobsData : [];
+    scheduledJobs.value = Array.isArray(scheduledJobsData) ? scheduledJobsData : [];
+
   } catch (error) {
     console.error('Failed to fetch dashboard data:', error);
+    remotes.value = [];
+    allJobs.value = [];
+    scheduledJobs.value = [];
   } finally {
     isLoadingData.value = false;
     isLoadingJobs.value = false;

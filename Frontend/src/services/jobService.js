@@ -142,4 +142,14 @@
         throw error;
       } 
     },
+
+    async getAllJobs() {
+      try {
+    const response = await apiClient.get('/jobs/alljobs');
+    return response.data;
+      } catch (error) {
+    console.error("Error fetching all jobs:", error);
+    throw error;
+      }
+  }
   }

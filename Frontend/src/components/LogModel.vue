@@ -1,3 +1,120 @@
+<script setup>
+const props = defineProps({
+  isVisible: Boolean,
+  log: Object
+});
+
+const emit = defineEmits(['close']);
+
+function handleClose() {
+  emit('close');
+}
+
+// ✅ Helper untuk mendapatkan Job Name
+function getJobName(log) {
+  if (!log) return 'Unknown Job';
+
+  // 1. PRIORITAS: Cek dari field baru di logs table (untuk one-shot RESTORE)
+  if (log.JobName) return log.JobName;
+  if (log.job_name) return log.job_name;
+
+  // 2. Fallback: Cek dari relasi ScheduledJob
+  if (log.ScheduledJob?.JobName) return log.ScheduledJob.JobName;
+  if (log.scheduled_job?.job_name) return log.scheduled_job.job_name;
+
+  // 3. Fallback: Cek dari ConfigSnapshot (backup lama)
+  const snapshot = log.ConfigSnapshot || log.config_snapshot;
+  if (snapshot) {
+    try {
+      const config = typeof snapshot === 'string' ? JSON.parse(snapshot) : snapshot;
+      return config.job_name || config.JobName || 'Manual Job';
+    } catch (e) {
+      return 'Manual Job';
+    }
+  }
+  return 'Unknown Job';
+}
+
+// ✅ Helper untuk mendapatkan Source Path
+function getSourcePath(log) {
+  if (!log) return '-';
+
+  // 1. PRIORITAS: Cek dari field baru di logs table (untuk one-shot RESTORE)
+  if (log.SourcePath) return log.SourcePath;
+  if (log.source_path) return log.source_path;
+
+  // 2. Fallback: Cek dari relasi ScheduledJob
+  if (log.ScheduledJob?.SourcePath) return log.ScheduledJob.SourcePath;
+  if (log.scheduled_job?.source_path) return log.scheduled_job.source_path;
+
+  // 3. Fallback: Cek dari ConfigSnapshot (backup lama)
+  const snapshot = log.ConfigSnapshot || log.config_snapshot;
+  if (snapshot) {
+    try {
+      const config = typeof snapshot === 'string' ? JSON.parse(snapshot) : snapshot;
+      return config.source_path || config.SourcePath || config.source || '-';
+    } catch (e) {
+      console.error("Error parsing snapshot for source path:", e);
+      return 'Config Error';
+    }
+  }
+
+  return '-';
+}
+
+// ✅ Helper untuk mendapatkan Transferred Bytes
+function getTransferredBytes(log) {
+  if (!log) return 0;
+  return log.TransferredBytes || log.transferred_bytes || 0;
+}
+
+// ✅ Helper untuk Status Class
+function getStatusClass(status) {
+  if (!status) return 'status-default';
+  const s = status.toUpperCase();
+  if (['SUCCESS', 'COMPLETED'].includes(s)) return 'status-success';
+  if (s.includes('FAIL') || s === 'ERROR') return 'status-failed';
+  if (s === 'RUNNING') return 'status-running';
+  return 'status-default';
+}
+
+// ✅ Format Full Timestamp
+function formatFullTimestamp(timestamp) {
+  if (!timestamp) return '-';
+  try {
+    return new Date(timestamp).toLocaleString('id-ID', {
+      dateStyle: 'medium',
+      timeStyle: 'medium'
+    });
+  } catch (e) {
+    return timestamp;
+  }
+}
+
+// ✅ Format File Size
+function formatFileSize(bytes) {
+  const size = Number(bytes);
+  if (!size || size === 0 || isNaN(size)) return '0 B';
+  
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const k = 1024;
+  const i = Math.floor(Math.log(size) / Math.log(k));
+  
+  return parseFloat((size / Math.pow(k, i)).toFixed(2)) + ' ' + units[i];
+}
+
+// ✅ Format JSON
+function formatJSON(jsonInput) {
+  if (!jsonInput) return '';
+  try {
+    const obj = typeof jsonInput === 'string' ? JSON.parse(jsonInput) : jsonInput;
+    return JSON.stringify(obj, null, 2);
+  } catch (e) {
+    return jsonInput;
+  }
+}
+</script>
+
 <template>
   <Teleport to="body">
     <Transition name="modal">
@@ -22,7 +139,7 @@
                 
                 <div class="info-item">
                   <span class="label">Object (Source Path)</span>
-                  <span class="truncate" :title="getSourcePath(log)">{{ getSourcePath(log) }}</span>
+                  <span class="value truncate" :title="getSourcePath(log)">{{ getSourcePath(log) }}</span>
                 </div>
 
                 <div class="info-item">
@@ -74,122 +191,7 @@
   </Teleport>
 </template>
 
-<script setup>
-const props = defineProps({
-  isVisible: Boolean,
-  log: Object
-});
-
-const emit = defineEmits(['close']);
-
-function handleClose() {
-  emit('close');
-}
-
-// ✅ Helper Baru: Mendapatkan Source Path
-function getSourcePath(log) {
-  if (!log) return '-';
-
-  // 1. Cek dari relasi ScheduledJob (Jika Job Otomatis)
-  // Periksa berbagai format casing (PascalCase atau snake_case)
-  if (log.ScheduledJob?.SourcePath) return log.ScheduledJob.SourcePath;
-  if (log.scheduled_job?.source_path) return log.scheduled_job.source_path;
-
-  // 2. Cek dari ConfigSnapshot (Jika Job Manual)
-  const snapshot = log.ConfigSnapshot || log.config_snapshot;
-  if (snapshot) {
-    try {
-      const config = typeof snapshot === 'string' ? JSON.parse(snapshot) : snapshot;
-      // Coba berbagai kemungkinan key di dalam JSON snapshot
-      return config.source_path || config.SourcePath || config.source || '-';
-    } catch (e) {
-      console.error("Error parsing snapshot for source path:", e);
-      return 'Manual Job (Config Error)';
-    }
-  }
-
-  return 'Unknown Source';
-}
-
-function getTransferredBytes(log) {
-  if (!log) return 0;
-  return log.transferred_bytes || log.TransferredBytes || log.TransferredByte || log.transferredByte || 0;
-}
-
-function getJobName(log) {
-  if (log.ScheduledJob?.JobName) return log.ScheduledJob.JobName;
-  if (log.scheduled_job?.job_name) return log.scheduled_job.job_name;
-  
-  const snapshot = log.ConfigSnapshot || log.config_snapshot;
-  if (snapshot) {
-    try {
-      const config = typeof snapshot === 'string' ? JSON.parse(snapshot) : snapshot;
-      return config.job_name || config.JobName || 'Manual Job';
-    } catch (e) {
-      return 'Manual Job';
-    }
-  }
-  return 'Unknown Job';
-}
-
-function getStatusClass(status) {
-  if (!status) return 'status-default';
-  const s = status.toUpperCase();
-  if (['SUCCESS', 'COMPLETED'].includes(s)) return 'status-success';
-  if (s.includes('FAIL') || s === 'ERROR') return 'status-failed';
-  if (s === 'RUNNING') return 'status-running';
-  return 'status-default';
-}
-
-function formatFullTimestamp(timestamp) {
-  if (!timestamp) return '-';
-  try {
-    return new Date(timestamp).toLocaleString('id-ID', {
-      dateStyle: 'medium',
-      timeStyle: 'medium'
-    });
-  } catch (e) {
-    return timestamp;
-  }
-}
-
-function formatFileSize(bytes) {
-  const size = Number(bytes);
-  if (!size || size === 0) return '0 B';
-  
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const k = 1024;
-  const i = Math.floor(Math.log(size) / Math.log(k));
-  
-  return parseFloat((size / Math.pow(k, i)).toFixed(2)) + ' ' + units[i];
-}
-
-function formatJSON(jsonInput) {
-  if (!jsonInput) return '';
-  try {
-    const obj = typeof jsonInput === 'string' ? JSON.parse(jsonInput) : jsonInput;
-    return JSON.stringify(obj, null, 2);
-  } catch (e) {
-    return jsonInput;
-  }
-}
-</script>
-
 <style scoped>
-/* ... (Style sama seperti sebelumnya) ... */
-
-/* Tambahan style khusus untuk path */
-.value.path {
-  font-family: 'Consolas', 'Monaco', monospace;
-  font-size: 0.85rem;
-  background: #f3f4f6;
-  padding: 2px 6px;
-  border-radius: 4px;
-  word-break: break-all; /* Agar path panjang turun ke bawah */
-  color: #4b5563;
-}
-
-/* ... */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -400,19 +402,20 @@ function formatJSON(jsonInput) {
   background: #333;
 }
 
-.modal-enter-active, .modal-leave-active { transition: opacity 0.2s ease; }
-.modal-enter-from, .modal-leave-to { opacity: 0; }
-.modal-enter-active .modal-container, .modal-leave-active .modal-container { transition: transform 0.2s ease; }
-.modal-enter-from .modal-container, .modal-leave-to .modal-container { transform: scale(0.95); }
+.modal-enter-active, .modal-leave-active {
+  transition: opacity 0.2s ease;
+}
 
-@media (max-width: 768px) {
-  .modal-container { width: 95%; max-height: 85vh; }
-  .modal-header { padding: 1rem 1.25rem; }
-  .header-left { flex-wrap: wrap; gap: 0.75rem; }
-  .modal-header h3 { font-size: 1rem; }
-  .modal-body { padding: 1rem; }
-  .info-grid { grid-template-columns: 1fr; }
-  .info-section { padding: 1rem; }
+.modal-enter-from, .modal-leave-to {
+  opacity: 0;
+}
+
+.modal-enter-active .modal-container, .modal-leave-active .modal-container {
+  transition: transform 0.2s ease;
+}
+
+.modal-enter-from .modal-container, .modal-leave-to .modal-container {
+  transform: scale(0.95);
 }
 
 .truncate {
@@ -421,9 +424,9 @@ function formatJSON(jsonInput) {
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: help;
+  display: inline-block;
 }
 
-/* --- TOOLTIP SAAT HOVER --- */
 .truncate:hover::after {
   content: attr(title);
   position: absolute;
@@ -440,5 +443,37 @@ function formatJSON(jsonInput) {
   margin-left: -50px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   font-weight: normal;
+}
+
+@media (max-width: 768px) {
+  .modal-container {
+    width: 95%;
+    max-height: 85vh;
+  }
+
+  .modal-header {
+    padding: 1rem 1.25rem;
+  }
+
+  .header-left {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .modal-header h3 {
+    font-size: 1rem;
+  }
+
+  .modal-body {
+    padding: 1rem;
+  }
+
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .info-section {
+    padding: 1rem;
+  }
 }
 </style>

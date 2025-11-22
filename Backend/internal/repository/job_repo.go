@@ -20,6 +20,7 @@ type JobRepository interface {
 	CountJobOnRemote(remoteName string) (int64, error)
 	DeleteJob(JobID uint) error
 	UpdateJob(jobID uint, updates map[string]interface{}) error
+	FindAllJobs() ([]models.ScheduledJob, error)
 }
 
 type jobRepositoryImpl struct {
@@ -28,6 +29,23 @@ type jobRepositoryImpl struct {
 
 func NewJobRepository(db *gorm.DB) JobRepository {
 	return &jobRepositoryImpl{DB: db}
+}
+
+func (r *jobRepositoryImpl) CountJobOnRemote(remoteName string) (int64, error) {
+	var count int64
+
+	err := r.DB.Model(&models.ScheduledJob{}).
+		Where("remote_name = ?", remoteName).
+		Where("operation_mode != ?", "RESTORE"). // ✅ Exclude restore one-shot
+		Count(&count).Error
+
+	if err != nil {
+		fmt.Printf("[ERROR] Gagal menghitung job untuk remote '%s': %v\n", remoteName, err)
+		return 0, fmt.Errorf("gagal menghitung job untuk remote %s: %w", remoteName, err)
+	}
+
+	fmt.Printf("[DEBUG] Remote '%s': %d active jobs\n", remoteName, count)
+	return count, nil
 }
 
 // Create: Menyimpan template Job baru
@@ -79,25 +97,6 @@ func (r *jobRepositoryImpl) UpdateJobActivity(jobID uint, isActive bool) error {
 	return result.Error
 }
 
-func (r *jobRepositoryImpl) CountJobOnRemote(remoteName string) (int64, error) {
-	var count int64
-
-	err := r.DB.Model(&models.ScheduledJob{}).
-		Where("remote_name = ?", remoteName).
-		Where("schedule_cron IS NOT NULL").
-		Where("schedule_cron != ''").
-		Where("is_active = ?", true).
-		Count(&count).Error
-	fmt.Printf("[DEBUG REPO] Menerima remoteName: '%s'\n", remoteName)
-
-	if err != nil {
-		// Log error atau tangani sesuai kebijakan aplikasi
-		return 0, fmt.Errorf("gagal menghitung job terjadwal untuk remote %s: %w", remoteName, err)
-	}
-
-	return count, nil
-}
-
 func (r *jobRepositoryImpl) FindManualJob() ([]models.ScheduledJob, error) {
 	var jobs []models.ScheduledJob
 	result := r.DB.Where("schedule_cron IS NULL OR schedule_cron = ?", "").Find(&jobs)
@@ -141,4 +140,11 @@ func (r *jobRepositoryImpl) UpdateJob(jobID uint, updates map[string]interface{}
 	}
 
 	return nil
+}
+
+func (r *jobRepositoryImpl) FindAllJobs() ([]models.ScheduledJob, error) {
+	var jobs []models.ScheduledJob
+	err := r.DB.Where("operation_mode != ?", "RESTORE").
+		Find(&jobs).Error
+	return jobs, err
 }
