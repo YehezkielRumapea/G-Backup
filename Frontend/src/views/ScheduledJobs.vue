@@ -3,7 +3,7 @@
     <div class="header">
       <div>
         <h1>Scheduled Jobs</h1>
-        <p class="subtitle">Memantau semua Job yang berjalan otomatis</p>
+        <p class="subtitle">Monitor all Jobs running automatically</p>
       </div>
     </div>
     

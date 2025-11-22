@@ -14,7 +14,7 @@
       @close="closeModal"
     />
 
-    <!-- ✅ Edit Job Modal - FIXED -->
+    <!-- ✅ Edit Job Modal -->
     <EditJobModal
       :job-id="editingJobId"
       :is-open="isEditModalOpen"
@@ -48,15 +48,15 @@
             <th>GDrive</th>
             <th>Last Run</th>
             <th>Status</th>
+            <th>Next Run</th>
             <th>Action</th>
           </tr>
         </thead>
         <tbody>
-          <JobRow
+          <ManualJobRow
             v-for="job in jobs"
             :key="job.id"
             :job="job"
-            :show-next-run="false"
             @trigger="handleTrigger"
             @view-script="handleViewScript"
             @edit="handleEdit"
@@ -93,7 +93,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import jobService from '@/services/jobService';
-import JobRow from '@/components/ManualJobRow.vue';
+import ManualJobRow from '@/components/ManualJobRow.vue';
 import ScriptPreview from '@/components/ScriptPreview.vue';
 import EditJobModal from '@/components/EditJobModal.vue';
 
@@ -105,18 +105,15 @@ const isModalVisible = ref(false);
 const currentScript = ref('');
 const currentJobId = ref(null);
 
-// ✅ Edit modal state
 const editingJobId = ref(null);
 const isEditModalOpen = ref(false);
 
-// ✅ Toast notification state
 const toast = ref({
   show: false,
   message: '',
-  type: 'success', // 'success' | 'error' | 'info'
-}); 
+  type: 'success',
+});
 
-// ✅ Fetch all manual jobs
 async function fetchData() {
   isLoading.value = true;
   errorMessage.value = null;
@@ -134,28 +131,24 @@ async function fetchData() {
 
 onMounted(fetchData);
 
-// ✅ Handle edit job - Open modal with job ID
 function handleEdit(jobId) {
   console.log('✅ handleEdit dipanggil dengan jobId:', jobId);
   editingJobId.value = jobId;
   isEditModalOpen.value = true;
 }
 
-// ✅ Close edit modal
 function closeEditModal() {
   console.log('✅ closeEditModal dipanggil');
   isEditModalOpen.value = false;
   editingJobId.value = null;
 }
 
-// ✅ Handle edit success - Reload jobs and show toast
 function handleEditSuccess() {
   console.log('✅ handleEditSuccess dipanggil');
-  fetchData(); // Reload jobs list
+  fetchData();
   showToast('Job berhasil diperbarui!', 'success');
 }
 
-// ✅ Handle delete job
 async function handleDelete(jobId, jobName) {
   if (!confirm(`Apakah Anda yakin ingin menghapus job "${jobName}"?`)) {
     return;
@@ -164,14 +157,13 @@ async function handleDelete(jobId, jobName) {
   try {
     await jobService.deleteJob(jobId);
     showToast('Job berhasil dihapus!', 'success');
-    fetchData(); // Reload jobs list
+    fetchData();
   } catch (error) {
     const errorMsg = error.response?.data?.error || error.message || 'Gagal menghapus job';
     showToast(errorMsg, 'error');
   }
 }
 
-// ✅ Handle trigger job
 async function handleTrigger(jobId) {
   if (!confirm(`Apakah Anda yakin ingin menjalankan job manual ID ${jobId} sekarang?`)) {
     return;
@@ -187,7 +179,6 @@ async function handleTrigger(jobId) {
   }
 }
 
-// ✅ Handle view script
 async function handleViewScript(jobId) {
   try {
     isModalVisible.value = true;
@@ -209,7 +200,6 @@ function closeModal() {
   currentJobId.value = null;
 }
 
-// ✅ Show toast notification
 function showToast(message, type = 'success') {
   toast.value = { show: true, message, type };
   setTimeout(() => {
@@ -217,7 +207,6 @@ function showToast(message, type = 'success') {
   }, 3000);
 }
 
-// ✅ Get toast CSS class
 function getToastClass(type) {
   const classes = {
     success: 'toast-success',
@@ -230,92 +219,97 @@ function getToastClass(type) {
 
 <style scoped>
 .manual-jobs-view {
-  padding: 2rem 1rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
 }
 
 .header {
-  margin-bottom: 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 2.5rem;
+  gap: 1rem;
 }
 
-.header h1 {
-  margin: 0 0 0.5rem 0;
-  font-size: 1.875rem;
+h1 {
+  font-size: 1.75rem;
   font-weight: bold;
   color: #1a1a1a;
+  margin: 0 0 0.5rem 0;
+  letter-spacing: -0.02em;
 }
 
-.header .subtitle {
-  margin: 0;
+.subtitle {
+  font-size: 0.95rem;
   color: #666;
-  font-size: 0.9375rem;
+  margin: 0;
+  font-weight: 400;
 }
 
-/* Status Messages */
 .status-message {
+  padding: 1rem;
+  border-radius: 6px;
+  font-size: 0.9375rem;
+  background: #f8f8f8;
+  color: #666;
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 1rem;
-  background: #f0f9ff;
-  border: 1px solid #bfdbfe;
-  border-radius: 6px;
-  color: #1e40af;
-  margin-bottom: 1rem;
-  font-size: 0.9375rem;
 }
 
 .status-message.error {
-  background: #fee2e2;
-  border-color: #fecaca;
-  color: #991b1b;
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fee2e2;
   justify-content: space-between;
 }
 
 .loading-dot {
   width: 8px;
   height: 8px;
-  background: currentColor;
+  background: #666;
   border-radius: 50%;
   animation: pulse 1.5s ease-in-out infinite;
 }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  50% { opacity: 0.3; }
 }
 
 .retry-btn {
-  background: currentColor;
-  color: white;
-  border: none;
-  padding: 0.5rem 1rem;
+  background: transparent;
+  border: 1px solid #dc2626;
+  color: #dc2626;
+  padding: 0.375rem 0.875rem;
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.875rem;
-  font-weight: 500;
+  transition: all 0.2s;
 }
 
 .retry-btn:hover {
-  opacity: 0.9;
+  background: #dc2626;
+  color: white;
 }
 
-/* Empty State */
 .empty-state {
   text-align: center;
   padding: 3rem 1rem;
 }
 
 .empty-state p {
-  margin: 0 0 1rem 0;
-  color: #666;
+  color: #999;
   font-size: 0.9375rem;
+  margin-bottom: 1.5rem;
 }
 
 .btn-create {
   display: inline-block;
   background: #1a1a1a;
   color: white;
-  padding: 0.625rem 1.5rem;
+  padding: 0.625rem 1.125rem;
   border-radius: 6px;
   text-decoration: none;
   font-weight: 500;
@@ -327,40 +321,38 @@ function getToastClass(type) {
   background: #333;
 }
 
-/* Table */
 .table-container {
-  overflow-x: auto;
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .jobs-table {
   width: 100%;
   border-collapse: collapse;
-  background: white;
-  border: 1px solid #e5e5e5;
-  border-radius: 6px;
-  overflow: hidden;
 }
 
 .jobs-table thead {
   background: #fafafa;
-  border-bottom: 1px solid #e5e5e5;
 }
 
 .jobs-table th {
-  padding: 1rem;
+  padding: 0.875rem 1rem;
   text-align: left;
+  font-size: 0.8125rem;
   font-weight: bold;
-  font-size: 0.875rem;
-  color: #1a1a1a;
+  color: #000000;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid #e5e5e5;
 }
 
 .jobs-table td {
   padding: 1rem;
-  border-bottom: 1px solid #e5e5e5;
+  border-bottom: 1px solid #f0f0f0;
   font-size: 0.9375rem;
-  color: #666;
+  color: #333;
 }
 
 .jobs-table tbody tr:last-child td {
@@ -368,7 +360,7 @@ function getToastClass(type) {
 }
 
 .jobs-table tbody tr:hover {
-  background: #f9f9f9;
+  background: #fafafa;
 }
 
 /* Toast Notification */
@@ -454,20 +446,27 @@ function getToastClass(type) {
   opacity: 0;
 }
 
-/* Responsive */
 @media (max-width: 768px) {
   .manual-jobs-view {
-    padding: 1rem;
+    padding: 1.5rem 1rem;
   }
-
-  .header h1 {
+  
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  h1 {
     font-size: 1.5rem;
+    font-weight: bold;
   }
-
-  .jobs-table th,
-  .jobs-table td {
-    padding: 0.75rem 0.5rem;
-    font-size: 0.8125rem;
+  
+  .table-container {
+    overflow-x: auto;
+  }
+  
+  .jobs-table {
+    min-width: 800px;
   }
 
   .toast-notification {

@@ -2,8 +2,9 @@
  <div class="remotes-view">
   <div class="header">
    <div>
-    <h1>Remote Monitoring</h1>
-    <p class="subtitle">Kelola dan pantau status GDrive Remote Anda</p>
+    <h1>Gdrive Monitoring</h1>
+    <p class="subtitle">
+Manage and monitor your Gdrive status</p>
    </div>
   </div>
   
@@ -20,7 +21,7 @@
    <table class="remotes-table">
     <thead>
      <tr>
-      <th>Remote</th>
+      <th>Gdrive</th>
       <th>Status</th>
       <th>Storage</th>
       <th>Job Runs</th>

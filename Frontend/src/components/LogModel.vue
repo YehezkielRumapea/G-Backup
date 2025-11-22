@@ -6,6 +6,7 @@
           <div class="modal-header">
             <div class="header-left">
               <h3>Log Details</h3>
+              <span class="log-id">ID: {{ log.ID }}</span>
             </div>
             <button @click="handleClose" class="close-btn">×</button>
           </div>
@@ -14,14 +15,16 @@
             <div class="info-section">
               <h4>Job Information</h4>
               <div class="info-grid">
-                                <div class="info-item">
+                <div class="info-item">
                   <span class="label">Job Name</span>
                   <span class="value">{{ getJobName(log) }}</span>
                 </div>
+                
                 <div class="info-item">
-                  <span class="label">Job ID</span>
-                  <span class="value">{{ log.JobID || log.job_id || 'Manual Job' }}</span>
+                  <span class="label">Object (Source Path)</span>
+                  <span class="truncate" :title="getSourcePath(log)">{{ getSourcePath(log) }}</span>
                 </div>
+
                 <div class="info-item">
                   <span class="label">Status</span>
                   <span class="value">
@@ -83,19 +86,40 @@ function handleClose() {
   emit('close');
 }
 
-// ✅ Helper Baru: Menangani berbagai kemungkinan nama field dari backend
+// ✅ Helper Baru: Mendapatkan Source Path
+function getSourcePath(log) {
+  if (!log) return '-';
+
+  // 1. Cek dari relasi ScheduledJob (Jika Job Otomatis)
+  // Periksa berbagai format casing (PascalCase atau snake_case)
+  if (log.ScheduledJob?.SourcePath) return log.ScheduledJob.SourcePath;
+  if (log.scheduled_job?.source_path) return log.scheduled_job.source_path;
+
+  // 2. Cek dari ConfigSnapshot (Jika Job Manual)
+  const snapshot = log.ConfigSnapshot || log.config_snapshot;
+  if (snapshot) {
+    try {
+      const config = typeof snapshot === 'string' ? JSON.parse(snapshot) : snapshot;
+      // Coba berbagai kemungkinan key di dalam JSON snapshot
+      return config.source_path || config.SourcePath || config.source || '-';
+    } catch (e) {
+      console.error("Error parsing snapshot for source path:", e);
+      return 'Manual Job (Config Error)';
+    }
+  }
+
+  return 'Unknown Source';
+}
+
 function getTransferredBytes(log) {
   if (!log) return 0;
-  // Cek prioritas nama field (sesuaikan dengan JSON response backend Anda)
   return log.transferred_bytes || log.TransferredBytes || log.TransferredByte || log.transferredByte || 0;
 }
 
 function getJobName(log) {
-  // Cek relasi ScheduledJob
   if (log.ScheduledJob?.JobName) return log.ScheduledJob.JobName;
   if (log.scheduled_job?.job_name) return log.scheduled_job.job_name;
   
-  // Cek ConfigSnapshot
   const snapshot = log.ConfigSnapshot || log.config_snapshot;
   if (snapshot) {
     try {
@@ -130,7 +154,7 @@ function formatFullTimestamp(timestamp) {
 }
 
 function formatFileSize(bytes) {
-  const size = Number(bytes); // Pastikan tipe number
+  const size = Number(bytes);
   if (!size || size === 0) return '0 B';
   
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -152,7 +176,20 @@ function formatJSON(jsonInput) {
 </script>
 
 <style scoped>
-/* ... (Style CSS Anda sudah bagus, biarkan tetap sama) ... */
+/* ... (Style sama seperti sebelumnya) ... */
+
+/* Tambahan style khusus untuk path */
+.value.path {
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 0.85rem;
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 4px;
+  word-break: break-all; /* Agar path panjang turun ke bawah */
+  color: #4b5563;
+}
+
+/* ... */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -180,7 +217,6 @@ function formatJSON(jsonInput) {
   overflow: hidden;
 }
 
-/* Header */
 .modal-header {
   display: flex;
   justify-content: space-between;
@@ -234,7 +270,6 @@ function formatJSON(jsonInput) {
   color: #1a1a1a;
 }
 
-/* Body */
 .modal-body {
   flex: 1;
   overflow-y: auto;
@@ -259,7 +294,6 @@ function formatJSON(jsonInput) {
   background: #a3a3a3;
 }
 
-/* Info Sections */
 .info-section {
   background: white;
   border-radius: 6px;
@@ -283,7 +317,6 @@ function formatJSON(jsonInput) {
   letter-spacing: 0.05em;
 }
 
-/* Info Grid */
 .info-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -367,7 +400,6 @@ function formatJSON(jsonInput) {
   background: #333;
 }
 
-/* Transitions */
 .modal-enter-active, .modal-leave-active { transition: opacity 0.2s ease; }
 .modal-enter-from, .modal-leave-to { opacity: 0; }
 .modal-enter-active .modal-container, .modal-leave-active .modal-container { transition: transform 0.2s ease; }
@@ -381,5 +413,32 @@ function formatJSON(jsonInput) {
   .modal-body { padding: 1rem; }
   .info-grid { grid-template-columns: 1fr; }
   .info-section { padding: 1rem; }
+}
+
+.truncate {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: help;
+}
+
+/* --- TOOLTIP SAAT HOVER --- */
+.truncate:hover::after {
+  content: attr(title);
+  position: absolute;
+  background: #333;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  z-index: 1000;
+  white-space: normal;
+  max-width: 400px;
+  word-wrap: break-word;
+  margin-top: 5px;
+  margin-left: -50px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  font-weight: normal;
 }
 </style>

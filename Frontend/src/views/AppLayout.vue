@@ -13,7 +13,7 @@
           </router-link>
           
           <router-link to="/remotes" class="nav-item">
-            <span class="nav-text">Remotes</span>
+            <span class="nav-text">Gdrive</span>
           </router-link>
           
           <router-link to="/scheduled" class="nav-item">

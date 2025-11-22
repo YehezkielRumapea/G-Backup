@@ -11,7 +11,7 @@
       <div class="stats-grid">
         <div class="stat-card">
           <div class="stat-content">
-            <span class="stat-label">Total Remote</span>
+            <span class="stat-label">Total Gdrive</span>
             <span class="stat-value">{{ totalRemotes }}</span>
           </div>
         </div>
@@ -55,7 +55,7 @@
         <button class="action-card" @click="openBackupModal">
           <div class="action-content">
             <h3>Create Backup</h3>
-            <p>Start manual backup job</p>
+            <p>Start backup job</p>
           </div>
           <span class="action-arrow">→</span>
         </button>
@@ -63,7 +63,7 @@
         <button class="action-card" @click="openRestoreModal">
           <div class="action-content">
             <h3>Start Restore</h3>
-            <p>Restore from cloud backup</p>
+            <p>Restore from Gdrive</p>
           </div>
           <span class="action-arrow">→</span>
         </button>
@@ -72,7 +72,7 @@
 
     <!-- Next Job Section -->
     <div class="section">
-      <h2>Next Scheduled Job</h2>
+      <h2>Next Job</h2>
       
       <div v-if="isLoadingJobs" class="status-message">
         <span class="loading-dot"></span>
@@ -87,7 +87,7 @@
         <h3>{{ nextJob.name }}</h3>
         <div class="job-details">
           <div class="detail-item">
-            <span class="detail-label">Remote</span>
+            <span class="detail-label">Gdrive</span>
             <span class="detail-value">{{ nextJob.remoteName }}</span>
           </div>
           <div class="detail-item">
