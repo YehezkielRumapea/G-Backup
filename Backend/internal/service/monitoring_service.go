@@ -5,6 +5,10 @@ import (
 	"fmt"
 	"gbackup-new/backend/internal/models"
 	"gbackup-new/backend/internal/repository"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -19,6 +23,7 @@ type MonitoringService interface {
 	RunRemoteChecks() error
 	StartMonitoringDaemon()
 	SyncRemotesWithRclone() error
+	ExtractEmailFromConfig(remoteName string) (string, error) // 🆕
 }
 
 type monitoringServiceImpl struct {
@@ -97,8 +102,16 @@ func (s *monitoringServiceImpl) UpdateRemoteStatus(remoteName string) error {
 		monitor.SystemMessage = ""
 	}
 
-	fmt.Printf("✅ %s: %.2f GB / %.2f GB (%.1f%%) | %d active jobs\n",
-		remoteName, monitor.UsedStorageGB, monitor.TotalStorageGB, usedPercentage, monitor.ActiveJobCount)
+	// 🆕 Extract email dari rclone.conf
+	email, err := s.ExtractEmailFromConfig(remoteName)
+	if err != nil {
+		fmt.Printf("⚠️ Warning: Gagal extract email untuk %s: %v\n", remoteName, err)
+		email = "" // Tetap proses, jangan error
+	}
+	monitor.OwnerEmail = email
+
+	fmt.Printf("✅ %s: %.2f GB / %.2f GB (%.1f%%) | %d active jobs | Email: %s\n",
+		remoteName, monitor.UsedStorageGB, monitor.TotalStorageGB, usedPercentage, monitor.ActiveJobCount, email)
 
 	return s.MonitorRepo.UpsertRemoteStatus(monitor)
 }
@@ -282,6 +295,207 @@ func (s *monitoringServiceImpl) FindByRemoteName(remoteName string) (*models.Mon
 	return s.MonitorRepo.FindRemoteByName(remoteName)
 }
 
+// ============================================================
+// 🆕 ExtractEmailFromConfig: Extract email dari rclone.conf
+// ============================================================
+
+// ============================================================
+// FIXED: ExtractEmailFromConfig - Handle multi-line tokens
+// ============================================================
+func (s *monitoringServiceImpl) ExtractEmailFromConfig(remoteName string) (string, error) {
+	fmt.Printf("[Service] Extract email untuk remote: %s\n", remoteName)
+
+	// Cari rclone.conf di home directory
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("gagal ambil home directory: %w", err)
+	}
+
+	configPath := filepath.Join(homeDir, ".config", "rclone", "rclone.conf")
+
+	// Fallback untuk Windows
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		configPath = filepath.Join(homeDir, "AppData", "Roaming", "rclone", "rclone.conf")
+	}
+
+	content, err := os.ReadFile(configPath)
+	if err != nil {
+		return "", fmt.Errorf("gagal baca rclone.conf: %w", err)
+	}
+
+	contentStr := string(content)
+
+	// ============================================================
+	// Parse: Find section dan extract full content
+	// ============================================================
+	sectionStart := strings.Index(contentStr, fmt.Sprintf("[%s]", remoteName))
+	if sectionStart == -1 {
+		return "", fmt.Errorf("remote %s tidak ditemukan di rclone.conf", remoteName)
+	}
+
+	// Find end of section (next [) atau end of file
+	sectionEnd := strings.Index(contentStr[sectionStart+1:], "[")
+	if sectionEnd == -1 {
+		sectionEnd = len(contentStr)
+	} else {
+		sectionEnd = sectionEnd + sectionStart + 1
+	}
+
+	sectionContent := contentStr[sectionStart:sectionEnd]
+	fmt.Printf("[DEBUG] Section found at position %d-%d\n", sectionStart, sectionEnd)
+
+	// ============================================================
+	// Extract token line (dimulai dari "token = ")
+	// ============================================================
+	tokenStartIdx := strings.Index(sectionContent, "token = ")
+	if tokenStartIdx == -1 {
+		return "", fmt.Errorf("token tidak ditemukan untuk remote %s", remoteName)
+	}
+
+	// Extract dari "token = " sampai end of line pertama dengan "}"
+	tokenLineStart := tokenStartIdx + 8 // len("token = ")
+	tokenContent := sectionContent[tokenLineStart:]
+
+	// Find matching closing brace untuk JSON object
+	braceCount := 0
+	tokenEnd := 0
+	inString := false
+	escapeNext := false
+
+	for i, ch := range tokenContent {
+		if escapeNext {
+			escapeNext = false
+			continue
+		}
+
+		if ch == '\\' {
+			escapeNext = true
+			continue
+		}
+
+		if ch == '"' && !escapeNext {
+			inString = !inString
+			continue
+		}
+
+		if !inString {
+			if ch == '{' {
+				braceCount++
+			} else if ch == '}' {
+				braceCount--
+				if braceCount == 0 {
+					tokenEnd = i + 1
+					break
+				}
+			}
+		}
+	}
+
+	if tokenEnd == 0 {
+		return "", fmt.Errorf("gagal find matching brace untuk token")
+	}
+
+	tokenJSON := strings.TrimSpace(tokenContent[:tokenEnd])
+	fmt.Printf("[DEBUG] Token JSON extracted (first 100 chars): %s\n", tokenJSON[:min(100, len(tokenJSON))])
+
+	// ============================================================
+	// Parse JSON token untuk ambil access_token
+	// ============================================================
+	var tokenData struct {
+		AccessToken string `json:"access_token"`
+	}
+
+	if err := json.Unmarshal([]byte(tokenJSON), &tokenData); err != nil {
+		fmt.Printf("[DEBUG] JSON parse error: %v\n", err)
+		return "", fmt.Errorf("gagal parse token JSON: %w", err)
+	}
+
+	if tokenData.AccessToken == "" {
+		return "", fmt.Errorf("access_token kosong di token JSON")
+	}
+
+	fmt.Printf("[DEBUG] Access token extracted (first 30 chars): %s...\n", tokenData.AccessToken[:min(30, len(tokenData.AccessToken))])
+
+	// ============================================================
+	// Call Google Drive API untuk ambil email
+	// ============================================================
+	email, err := s.fetchEmailFromGoogleAPI(tokenData.AccessToken)
+	if err != nil {
+		fmt.Printf("⚠️ Warning: Gagal fetch email dari API: %v\n", err)
+		return "", err
+	}
+
+	fmt.Printf("✅ Email ditemukan untuk %s: %s\n", remoteName, email)
+	return email, nil
+}
+
+// ============================================================
+// fetchEmailFromGoogleAPI: Call Google Drive API untuk ambil email
+// ============================================================
+func (s *monitoringServiceImpl) fetchEmailFromGoogleAPI(accessToken string) (string, error) {
+	const maxRetries = 3
+	const timeout = 10 * time.Second
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		req, err := http.NewRequest("GET",
+			"https://www.googleapis.com/drive/v3/about?fields=user(emailAddress,displayName)",
+			nil)
+		if err != nil {
+			return "", fmt.Errorf("gagal create request: %w", err)
+		}
+
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
+
+		client := &http.Client{Timeout: timeout}
+		resp, err := client.Do(req)
+		if err != nil {
+			fmt.Printf("⚠️ Attempt %d gagal: %v\n", attempt, err)
+			if attempt < maxRetries {
+				time.Sleep(time.Duration(attempt) * time.Second)
+				continue
+			}
+			return "", fmt.Errorf("gagal call Google Drive API setelah %d attempts: %w", maxRetries, err)
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return "", fmt.Errorf("gagal baca response body: %w", err)
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			return "", fmt.Errorf("Google Drive API error (status %d): %s", resp.StatusCode, string(body))
+		}
+
+		var apiResp struct {
+			User struct {
+				EmailAddress string `json:"emailAddress"`
+			} `json:"user"`
+		}
+
+		if err := json.Unmarshal(body, &apiResp); err != nil {
+			return "", fmt.Errorf("gagal parse API response: %w", err)
+		}
+
+		email := apiResp.User.EmailAddress
+		if email == "" {
+			return "", fmt.Errorf("email kosong dari API response")
+		}
+
+		return email, nil
+	}
+
+	return "", fmt.Errorf("failed to fetch email after retries")
+}
+
+// Helper function
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 func findMissingRemotes(sourceList, targetList []string) []string {
 	missing := []string{}
 
@@ -300,5 +514,5 @@ func findMissingRemotes(sourceList, targetList []string) []string {
 }
 
 func (s *monitoringServiceImpl) GetAllJobs() ([]models.ScheduledJob, error) {
-	return s.JobRepo.FindAllJobs() // Semua job aktif
+	return s.JobRepo.FindAllJobs()
 }

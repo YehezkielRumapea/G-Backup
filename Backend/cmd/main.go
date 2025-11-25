@@ -9,7 +9,7 @@ import (
 	"time"
 
 	// Import semua package yang dibutuhkan
-	"gbackup-new/backend/internal/handler" // Dibutuhkan untuk AutoMigrate
+	"gbackup-new/backend/internal/handler"
 	"gbackup-new/backend/internal/repository"
 	"gbackup-new/backend/internal/service"
 	"gbackup-new/backend/pkg/database"
@@ -20,9 +20,6 @@ import (
 	echomid "github.com/labstack/echo/v4/middleware"
 )
 
-const DefaultAdminUsername = "admin"
-const DefaultAdminPassword = "admin123" // Ganti ini di produksi
-
 func loadDotEnv() {
 	exePath, err := os.Executable()
 	if err != nil {
@@ -31,7 +28,7 @@ func loadDotEnv() {
 	}
 	exeDir := filepath.Dir(exePath)
 
-	// Cari .env di: direktori binary, parent, dan parent’s parent
+	// Searching .env di lokal
 	candidates := []string{
 		filepath.Join(exeDir, ".env"),
 		filepath.Join(exeDir, "..", ".env"),
@@ -47,14 +44,13 @@ func loadDotEnv() {
 		}
 	}
 
-	// fallback: coba relative ke CWD (kalau kebetulan cocok)
 	_ = godotenv.Load(".env", "../.env")
 }
 func main() {
 	// --- 1. MEMUAT .ENV ---
 	loadDotEnv()
 
-	// Ambil Kunci Rahasia JWT (Wajib)
+	// Ambil Kunci JWT (Wajib)
 	jwtSecretKey := os.Getenv("JWT_SECRET_KEY")
 	if jwtSecretKey == "" {
 		log.Fatal("FATAL: JWT_SECRET_KEY ada")
@@ -74,7 +70,6 @@ func main() {
 	logRepo := repository.NewLogRepository(dbInstance)
 	monitorRepo := repository.NewMonitoringRepository(dbInstance)
 	browserRepo := repository.NewBrowserRepository()
-	// remoteRepo := repository.NewRemoteRepository(dbInstance) // Untuk "Add Remote"
 
 	// 3.2. Inisialisasi Service (Lapisan Logika Bisnis)
 	authSvc := service.NewAuthService(userRepo, jwtSecretKey)
@@ -82,7 +77,6 @@ func main() {
 	backupSvc := service.NewBackupService(jobRepo, logRepo, monitorRepo, monitorSvc) // Orkestrator 3 Fase
 	schedulerSvc := service.NewSchedulerService(jobRepo, backupSvc)
 	browserSvc := service.NewBrowserService(browserRepo)
-	// remoteSvc := service.NewRemoteService(remoteRepo) // Service "Add Remote"
 
 	// 3.3. Inisialisasi Handler (Controller Layer)
 	authHandler := handler.NewAuthHandler(authSvc)
@@ -92,14 +86,6 @@ func main() {
 	restoreHandler := handler.NewRestoreHandler(backupSvc)
 	browserHandler := handler.NewBrowserHandler(browserSvc)
 	setupHandler := handler.NewSetupHandler(authSvc)
-	// remoteHandler := handler.NewRemoteHandler(remoteSvc)
-
-	// --- 4. SEEDING ADMIN AWAL ---
-	// if err := authSvc.RegisterAdmin(DefaultAdminUsername, DefaultAdminPassword); err != nil {
-	// fmt.Printf("Admin Seeding Status: %v\n", err)
-	// } else {
-	// fmt.Println("✅ Admin user berhasil dibuat.")
-	// }
 
 	// --- 5. SETUP WEB SERVER ECHO ---
 	e := echo.New()
@@ -115,23 +101,13 @@ func main() {
 		return c.String(http.StatusOK, "G-Backup New Architecture is Running!")
 	})
 
-	// ===========================================
-	// RUTE PUBLIK UTAMA (TIDAK DILINDUNGI JWT)
-	// ===========================================
-
 	// Rute Publik (Login)
 	e.POST("/api/v1/auth/login", authHandler.Login)
-
-	// ⭐ KOREKSI DI SINI: GUNAKAN PATH LENGKAP /api/v1/setup AGAR TIDAK TERKENA JWT MIDDLEWARE
 	setupGroup := e.Group("/api/v1/setup")
 	setupGroup.GET("/status", setupHandler.GetSetupStatus)          // Cek apakah admin sudah ada
 	setupGroup.POST("/register", setupHandler.RegisterInitialAdmin) // Registrasi admin pertama
 
-	// ===========================================
-	// RUTE PRIVAT (DILINDUNGI JWT)
-	// ===========================================
-
-	// Rute Privat (Dilindungi JWT)
+	// Rute Privat
 	r := e.Group("/api/v1")
 	r.Use(echojwt.WithConfig(echojwt.Config{
 		SigningKey: []byte(jwtSecretKey),
@@ -141,31 +117,28 @@ func main() {
 	r.GET("/monitoring/remotes", monitorHandler.GetRemoteStatusList)
 	r.GET("/monitoring/logs", monitorHandler.GetJobLogs)
 	r.GET("/monitoring/jobs", monitorHandler.GetScheduledJobs)
+	r.GET("/monitoring/drivemail", monitorHandler.GetRemotes)
 
 	// Rute Job Management (Create, List, Trigger)
 	r.GET("/jobs/scheduled", jobHandler.GetScheduledJobs)    // List Job Monitoring
 	r.GET("/jobs/script/:id", jobHandler.GetJobScript)       // Pratinjau Script
 	r.POST("/jobs/trigger/:id", jobHandler.TriggerManualJob) // Tombol "Run Now"
-	r.GET("/jobs/manual", jobHandler.GetManualJob)
-	r.DELETE("/jobs/delete/:id", jobHandler.DeleteJob)
-	r.PUT("/jobs/update/:id", jobHandler.UpdateJob)
-	r.GET("/jobs/:id", jobHandler.GetJobByID)
-	r.GET("/jobs/alljobs", monitorHandler.GetAllJobs)
+	r.GET("/jobs/manual", jobHandler.GetManualJob)           // List Job Manual
+	r.DELETE("/jobs/delete/:id", jobHandler.DeleteJob)       // Hapus Job
+	r.PUT("/jobs/update/:id", jobHandler.UpdateJob)          // Update Job
+	r.GET("/jobs/:id", jobHandler.GetJobByID)                // Get Job by ID
+	r.GET("/jobs/alljobs", monitorHandler.GetAllJobs)        // Get All Jobs (scheduled + Manual)
 
 	// Rute Aksi
-	r.POST("/jobs/new", backupHandler.CreateNewJob)        // Create Backup (Manual/Auto)
-	r.POST("/jobs/restore", restoreHandler.TriggerRestore) // Create Restore
-	r.GET("/browser/files", browserHandler.ListFiles)
-	r.GET("/browser/remotes", browserHandler.GetAvailableRemotes)
-	r.GET("/browser/info", browserHandler.GetFileInfo)
-
-	// Rute Konfigurasi
-	// r.POST("/remotes/new", remoteHandler.AddNewRemote) // Add New Remote
+	r.POST("/jobs/new", backupHandler.CreateNewJob)               // Create Backup (Manual/Auto)
+	r.POST("/jobs/restore", restoreHandler.TriggerRestore)        // Create Restore
+	r.GET("/browser/files", browserHandler.ListFiles)             //browse files
+	r.GET("/browser/remotes", browserHandler.GetAvailableRemotes) //list remotes
+	r.GET("/browser/info", browserHandler.GetFileInfo)            //file info
 
 	// --- 7. START DAEMONS (Goroutines) ---
 	schedulerSvc.StartDaemon() // Memulai CRON Daemon
 	monitorSvc.StartMonitoringDaemon()
-	// (Tambahkan Goroutine untuk auto-update monitoring jika perlu)
 
 	go func() {
 		time.Sleep(2 * time.Second)

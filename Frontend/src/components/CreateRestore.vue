@@ -14,7 +14,7 @@
           <div class="step-indicator">
             <div :class="['step', { active: currentStep >= 1, completed: currentStep > 1 }]">
               <div class="step-number">1</div>
-              <div class="step-label">Select Remote</div>
+              <div class="step-label">Select Drive</div>
             </div>
             <div class="step-line" :class="{ completed: currentStep > 1 }"></div>
 
@@ -37,17 +37,17 @@
 
             <div v-if="loadingRemotes" class="loading">
               <div class="spinner"></div>
-              <p>Loading remotes...</p>
+              <p>Loading drives...</p>
             </div>
 
             <div v-else-if="remotesList.length === 0" class="empty-state">
-              <p>❌ Tidak ada remote ditemukan</p>
+              <p>❌ Tidak ada drive ditemukan</p>
             </div>
 
             <div v-else class="form-group">
               <label for="restore-remote">Remote Name *</label>
               <select id="restore-remote" v-model="selectedRemote" required>
-                <option value="" disabled>Pilih Remote</option>
+                <option value="" disabled>Pilih Drive</option>
                 <option v-for="remote in remotesList" :key="remote.name" :value="remote.name">
                   {{ remote.name }}
                 </option>
@@ -114,7 +114,7 @@
             <!-- Review -->
             <div class="review-box">
               <div class="review-item">
-                <strong>📍 Remote:</strong>
+                <strong>📍 Drive:</strong>
                 <span>{{ selectedRemote }}</span>
               </div>
               <div class="review-item">

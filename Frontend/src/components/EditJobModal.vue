@@ -20,7 +20,6 @@
         <form v-else @submit.prevent="handleSubmit" class="config-form">
           <p class="form-description">Edit job configuration. Operation mode cannot be changed.</p>
 
-
           <div class="form-group">
             <label for="edit-jobName">Job Name *</label>
             <input 

@@ -14,4 +14,5 @@ type Monitoring struct {
 	LastCheckedAt    time.Time `gorm:"column:last_checked_at"`
 	ActiveJobCount   int64     `gorm:"default:0"`
 	TransferredBytes int64     `gorm:"default:0"`
+	OwnerEmail       string    `gorm:"column:owner_email;size:100;default:''"`
 }

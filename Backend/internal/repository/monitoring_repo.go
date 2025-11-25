@@ -36,6 +36,7 @@ func (r *monitoringRepositoryImpl) UpsertRemoteStatus(monitor *models.Monitoring
 			"last_checked_at",
 			"system_message",
 			"active_job_count",
+			"owner_email",
 		}),
 	}).Create(monitor)
 

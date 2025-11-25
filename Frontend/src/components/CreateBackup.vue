@@ -24,9 +24,9 @@
 
           <!-- Remote Name (Dropdown List) -->
           <div class="form-group">
-            <label for="backup-remote">Remote Name *</label>
+            <label for="backup-remote">Drive Name *</label>
             <select id="backup-remote" v-model="backupForm.remote_name" required>
-              <option value="" disabled>Select Remote</option>
+              <option value="" disabled>Select Drive</option>
               <option v-for="remote in remoteList" :key="remote.name" :value="remote.name">
                 {{ remote.name }}
               </option>

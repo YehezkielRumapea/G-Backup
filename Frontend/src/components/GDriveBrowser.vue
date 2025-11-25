@@ -7,13 +7,6 @@
         <button v-if="currentPath !== '/'" @click="goBack" class="btn-back">
           ← Back
         </button>
-        <button 
-          v-if="selectedItem" 
-          @click="confirmSelection" 
-          class="btn-select"
-        >
-          ✅ Select "{{ selectedItem.name }}"
-        </button>
       </div>
     </div>
 
@@ -38,17 +31,16 @@
       </template>
     </div>
 
-    <!-- Selected Item Info -->
+    <!-- Selected Item Info (Display Only) -->
     <div v-if="selectedItem" class="selected-banner">
       <div class="selected-icon">
         {{ selectedItem.is_dir ? '📁' : getFileIcon(selectedItem.name) }}
       </div>
       <div class="selected-content">
-        <strong>Selected:</strong> {{ selectedItem.name }}
+        <strong>✅ Selected:</strong> {{ selectedItem.name }}
         <br>
         <small>{{ selectedItem.is_dir ? 'Folder' : formatFileSize(selectedItem.size) }} • {{ currentPath }}</small>
       </div>
-      <button @click="clearSelection" class="btn-clear">✕</button>
     </div>
 
     <!-- Loading State -->
@@ -127,7 +119,7 @@
       <small>
         💡 <strong>Folder:</strong> Click to select, Double-click to open<br>
         💡 <strong>File:</strong> Click to select<br>
-        💡 Click "Select" button to confirm your choice
+        💡 Selection otomatis disimpan
       </small>
     </div>
   </div>
@@ -207,32 +199,21 @@ async function loadFiles() {
   }
 }
 
-// Select item (file atau folder)
+// Select item dan langsung emit (tanpa perlu confirm button)
 function selectItem(file) {
   selectedItem.value = file;
   console.log(`✅ Selected: ${file.name} (${file.is_dir ? 'Folder' : 'File'})`);
-}
-
-// Clear selection
-function clearSelection() {
-  selectedItem.value = null;
-}
-
-// Confirm selection dan emit ke parent
-function confirmSelection() {
-  if (!selectedItem.value) return;
   
-  const item = selectedItem.value;
-  
+  // Auto-emit langsung
   emit('select-file', {
-    name: item.name,
-    path: item.path,
-    size: item.size,
-    is_dir: item.is_dir,
+    name: file.name,
+    path: file.path,
+    size: file.size,
+    is_dir: file.is_dir,
     remote: props.remoteName
   });
   
-  console.log(`🎯 Confirmed selection: ${item.name}`);
+  console.log(`🎯 Selection emitted: ${file.name}`);
 }
 
 // Navigate ke path tertentu (untuk double-click folder)
@@ -353,8 +334,7 @@ onMounted(() => {
   gap: 0.5rem;
 }
 
-.btn-back,
-.btn-select {
+.btn-back {
   padding: 0.5rem 1rem;
   border-radius: 6px;
   cursor: pointer;
@@ -362,9 +342,6 @@ onMounted(() => {
   font-weight: 500;
   transition: all 0.2s;
   border: 1px solid #e5e5e5;
-}
-
-.btn-back {
   background: #f5f5f5;
   color: #666;
 }
@@ -372,16 +349,6 @@ onMounted(() => {
 .btn-back:hover {
   background: #e5e5e5;
   border-color: #d4d4d4;
-}
-
-.btn-select {
-  background: #22c55e;
-  color: white;
-  border: none;
-}
-
-.btn-select:hover {
-  background: #16a34a;
 }
 
 /* Selected Banner */
@@ -407,20 +374,6 @@ onMounted(() => {
 }
 
 .selected-content strong {
-  color: #15803d;
-}
-
-.btn-clear {
-  background: transparent;
-  border: none;
-  color: #166534;
-  cursor: pointer;
-  font-size: 1.25rem;
-  padding: 0;
-  flex-shrink: 0;
-}
-
-.btn-clear:hover {
   color: #15803d;
 }
 
@@ -644,11 +597,9 @@ onMounted(() => {
 
   .header-actions {
     width: 100%;
-    flex-direction: column;
   }
 
-  .btn-back,
-  .btn-select {
+  .btn-back {
     width: 100%;
   }
 

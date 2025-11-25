@@ -145,7 +145,6 @@ func (s *backupServiceImpl) executeJobLifecycle(job models.ScheduledJob) {
 	// --- FASE 1: PRE-SCRIPT ---
 	if job.PreScript != "" {
 		fmt.Printf("[WORKER %d] Menjalankan Pre-Script...\n", job.ID)
-		// "Hardening" script user
 		hardenedPreScript := fmt.Sprintf("set -eo pipefail; \n%s", job.PreScript)
 		preScriptArgs := []string{"bash", "-c", hardenedPreScript}
 
@@ -155,7 +154,7 @@ func (s *backupServiceImpl) executeJobLifecycle(job models.ScheduledJob) {
 			finalResult = result
 			finalStatus = "FAIL_PRE_SCRIPT"
 			s.handleJobCompletion(job, finalResult, finalStatus)
-			return // Hentikan eksekusi
+			return
 		}
 	}
 
@@ -217,7 +216,7 @@ func (s *backupServiceImpl) executeJobLifecycle(job models.ScheduledJob) {
 		finalResult = resultRclone
 		finalStatus = "FAIL_RCLONE"
 		s.handleJobCompletion(job, finalResult, finalStatus)
-		return // Hentikan eksekusi
+		return
 	}
 
 	lines := strings.Split(resultRclone.Output, "\n")
@@ -230,7 +229,7 @@ func (s *backupServiceImpl) executeJobLifecycle(job models.ScheduledJob) {
 
 	if transferStatus != "" {
 		fmt.Printf("📊 [WORKER %d] Stats: %s\n", job.ID, transferStatus)
-		// Tambahkan info ini ke output agar tersimpan di DB Log
+		// menyimpan  Log
 		resultRclone.Output = fmt.Sprintf("%s\n\n%s", transferStatus, resultRclone.Output)
 	}
 
@@ -276,20 +275,16 @@ func (s *backupServiceImpl) buildRcloneArgs(job models.ScheduledJob, runtimeDest
 	var SourcePath, Destination string
 
 	if isRestore {
-		// RESTORE SELALU copy folder atau file dari remote ke lokal
 		SourcePath = fmt.Sprintf("%s:%s", job.RemoteName, job.SourcePath)
 		Destination = job.DestinationPath
-		command = "copy" // restore selalu copy
+		command = "copy"
 	} else {
-		// BACKUP
 		SourcePath = job.SourcePath
 		Destination = fmt.Sprintf("%s:%s", job.RemoteName, runtimeDestPath)
 
 		if !isSourceDir {
-			// File → gunakan copyto agar tidak dianggap folder
 			command = "copyto"
 		} else {
-			// Folder → tetap copy
 			command = "copy"
 		}
 	}
@@ -301,9 +296,9 @@ func (s *backupServiceImpl) buildRcloneArgs(job models.ScheduledJob, runtimeDest
 		Destination,
 		"--checksum",
 		"--no-traverse",
-		"--progress",    // ✅ TAMBAHAN: Tampilkan progress dengan stats
-		"--stats", "5s", // ✅ UPDATE: Print stats setiap 5 detik (bukan 0)
-		"--stats-log-level", "INFO", // ✅ UPDATE: Change to INFO level
+		"--progress",    //Tampilkan progress dengan stats
+		"--stats", "5s", //Print stats setiap 5 detik
+		"--stats-log-level", "INFO", //Change to INFO level
 		"--human-readable",
 	}
 
