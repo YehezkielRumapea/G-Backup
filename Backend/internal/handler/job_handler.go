@@ -147,7 +147,6 @@ func (h *JobHandler) UpdateJob(c echo.Context) error {
 		ScheduleCron    *string `json:"schedule_cron"`
 		PreScript       *string `json:"pre_script"`
 		PostScript      *string `json:"post_script"`
-		IsActive        *bool   `json:"is_active"`
 	}
 
 	if err := c.Bind(&req); err != nil {
@@ -188,9 +187,6 @@ func (h *JobHandler) UpdateJob(c echo.Context) error {
 	}
 	if req.PostScript != nil {
 		updated.PostScript = *req.PostScript
-	}
-	if req.IsActive != nil {
-		updated.IsActive = *req.IsActive
 	}
 
 	// 4. Panggil service

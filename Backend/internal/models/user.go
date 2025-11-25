@@ -8,7 +8,6 @@ type User struct {
 	Username     string `gorm:"size:50;unique;not null"`
 	Email        string `gorm:"size:100;unique;not null"`
 	PasswordHash string `gorm:"column:password_hash;size:255;not null"`
-	IsActive     bool   `gorm:"column:is_active;default:true"`
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }

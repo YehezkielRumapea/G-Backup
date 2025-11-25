@@ -169,7 +169,7 @@ function formatLastChecked(isoDate) {
 
 .warning {
     font-size: 0.75rem;
-    color: #e67e22;
+    color: #ff0000;
     margin-top: 0.25rem;
 }
 

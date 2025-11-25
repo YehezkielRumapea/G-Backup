@@ -116,7 +116,7 @@ func (s *backupServiceImpl) executeJobLifecycle(job models.ScheduledJob) {
 	var finalStatus string
 
 	// 🚨 LANGKAH PENCEGAHAN (Hanya untuk Job Terjadwal) 🚨
-	if job.OperationMode == "BACKUP" && job.ScheduleCron != "" {
+	if job.OperationMode == "BACKUP" {
 		const MinFreeGB = 1.0 // Batas aman yang dibutuhkan
 
 		// 1. Dapatkan status remote
@@ -126,18 +126,22 @@ func (s *backupServiceImpl) executeJobLifecycle(job models.ScheduledJob) {
 			// 2. Hitung/Estimasi ukuran sumber
 			sourceSizeGB, _ := s.CalculateSourceSizeGB(job.SourcePath)
 			requiredSpace := sourceSizeGB + MinFreeGB
+			availableSpace := monitor.FreeStorageGB
 
-			// 3. Bandingkan dan SUSPEND
-			if monitor.FreeStorageGB < requiredSpace {
-				errorMsg := fmt.Sprintf("⛔ Job ditangguhkan: Ruang di %s (%.2f GB) tidak cukup untuk data ini (%.2f GB).",
-					job.RemoteName, monitor.FreeStorageGB, requiredSpace)
+			fmt.Printf("[WORKER %d] 📊 Source size: %.2f GB\n", job.ID, sourceSizeGB)
+			fmt.Printf("[WORKER %d] 📊 Available space: %.2f GB\n", job.ID, availableSpace)
+			fmt.Printf("[WORKER %d] 📊 Required space: %.2f GB\n", job.ID, requiredSpace)
 
-				// Catat kegagalan dan SUSPEND Job
-				s.handleJobCompletion(job, RcloneResult{Success: false, ErrorMsg: errorMsg}, "FAIL_STORAGE")
-				s.JobRepo.UpdateJobActivity(job.ID, false) // ✅ SUSPEND JOB
-				fmt.Printf("⛔ [WORKER %d] Job Terjadwal DITANGGUHKAN karena ruang penuh.\n", job.ID)
+			if availableSpace < requiredSpace {
+				errorMsg := fmt.Sprintf(
+					"⛔ STORAGE INSUFFICIENT: Perlu %.2f GB, tapi hanya tersedia %.2f GB di %s",
+					requiredSpace, availableSpace, job.RemoteName,
+				)
+				fmt.Printf("[WORKER %d] %s\n", job.ID, errorMsg)
+				s.handleJobCompletion(job, RcloneResult{Success: false, ErrorMsg: errorMsg}, "NOT_ENOUGH_SPACE")
 				return
 			}
+			fmt.Printf("✅ [WORKER %d] Storage OK: Cukup untuk backup\n", job.ID)
 		}
 		// Jika gagal mendapatkan status monitor, biarkan Job berjalan (risiko kecil).
 	}
@@ -309,18 +313,25 @@ func (s *backupServiceImpl) buildRcloneArgs(job models.ScheduledJob, runtimeDest
 func (s *backupServiceImpl) handleJobCompletion(job models.ScheduledJob, result RcloneResult, status string) {
 	LogMutex.Lock()
 	defer LogMutex.Unlock()
-	stats := parseRcloneStats(result.Output)
-	logMessage := result.ErrorMsg
 
-	// 1. Catat ke tabel Logs (dengan TransferredBytes yang sudah di-parse)
+	// --- 1. LOGIKA PESAN LOG ---
+	// Jika Sukses: Ambil output bersih (Size | Time)
+	// Jika Gagal: Ambil output + Error message
+	logMessage := result.Output
+	if status != "SUCCESS" {
+		logMessage = fmt.Sprintf("%s\nError Details: %s", result.Output, result.ErrorMsg)
+	}
+
+	// --- 2. SIMPAN KE TABEL LOGS (Detail Status) ---
+	// Di sini kita simpan status spesifik (misal: FAIL_RCLONE)
 	newLog := &models.Log{
 		JobID:            nil,
 		JobName:          job.JobName,
 		SourcePath:       job.SourcePath,
-		Status:           status,
+		Status:           status, // ✅ Simpan FAIL_RCLONE/FAIL_PRE_SCRIPT disini
 		Message:          logMessage,
 		DurationSec:      int(result.Duration.Seconds()),
-		TransferredBytes: result.TransferredBytes, // ✅ UPDATED: dari parsed bytes
+		TransferredBytes: result.TransferredBytes,
 		Timestamp:        time.Now(),
 	}
 
@@ -331,25 +342,26 @@ func (s *backupServiceImpl) handleJobCompletion(job models.ScheduledJob, result 
 	fmt.Printf("[LOG DEBUG] Saving ID: %d | Status: %s | Bytes: %d\n", job.ID, status, result.TransferredBytes)
 	s.LogRepo.CreateLog(newLog)
 
-	// 2. Update status akhir di tabel scheduled_jobs
 	if job.ID != 0 {
-		// 2. Update status akhir di tabel scheduled_jobs
-		dbStatus := status
+		var dbStatus string
+
 		if status == "SUCCESS" {
 			dbStatus = "COMPLETED"
-		}
-
-		if job.ScheduleCron == "" {
-			dbStatus = "PENDING"
+		} else {
+			dbStatus = "FAILED"
 		}
 
 		s.JobRepo.UpdateLastRunStatus(job.ID, time.Now(), dbStatus)
 	}
-	// ✅ TAMBAHAN: Log ringkasan
+
+	// --- 4. TERMINAL LOG SUMMARY ---
 	if status == "SUCCESS" {
+		// Parse stats hanya untuk print terminal yang cantik (opsional)
+		stats := parseRcloneStats(result.Output)
 		fmt.Printf("✅ [COMPLETE] Job %d: Transferred %.2f GB in %d seconds (Speed: %s)\n",
 			job.ID,
-			float64(result.Duration)/1e9/1e9,
+			float64(result.TransferredBytes)/1073741824.0,
+			int(result.Duration.Seconds()),
 			stats.Speed,
 		)
 	} else {
@@ -358,12 +370,55 @@ func (s *backupServiceImpl) handleJobCompletion(job models.ScheduledJob, result 
 }
 
 func (s *backupServiceImpl) CalculateSourceSizeGB(path string) (float64, error) {
-	info, err := os.Stat(path)
+	var totalSize int64
+
+	// ============================================================
+	// STEP 1: Check apakah path (file/folder) exists
+	// ============================================================
+	fileInfo, err := os.Stat(path)
 	if err != nil {
-		return 0, fmt.Errorf("gagal stat path %s: %w", path, err)
+		return 0, fmt.Errorf("path tidak ditemukan: %w", err)
 	}
-	const BytesToGB = 1073741824.0
-	return float64(info.Size()) / BytesToGB, nil
+
+	// ============================================================
+	// STEP 2: Jika file single, return ukurannya saja
+	// ============================================================
+	if !fileInfo.IsDir() {
+		// Path adalah FILE tunggal (bukan folder)
+		const BytesToGB = 1073741824.0
+		sizeGB := float64(fileInfo.Size()) / BytesToGB
+		fmt.Printf("✅ Single file size calculated: %.2f GB (%d bytes)\n", sizeGB, fileInfo.Size())
+		return sizeGB, nil
+	}
+
+	err = filepath.Walk(path, func(filePath string, info os.FileInfo, err error) error {
+		// Error handling: jika ada error read file/folder, skip saja
+		if err != nil {
+			fmt.Printf("⚠️ Skip item %s (error: %v)\n", filePath, err)
+			return nil // return nil = lanjut ke file/folder berikutnya
+		}
+
+		if !info.IsDir() {
+			// Item adalah FILE (bukan folder)
+			totalSize += info.Size() // Tambah size file ke counter
+		}
+
+		return nil // return nil = lanjut walk ke file/folder berikutnya
+	})
+
+	// Error handling jika walk gagal
+	if err != nil && err != filepath.SkipDir {
+		return 0, fmt.Errorf("gagal walk directory %s: %w", path, err)
+	}
+
+	// ============================================================
+	// STEP 4: Convert total bytes to GB
+	// ============================================================
+	const BytesToGB = 1073741824.0 // 1 GB = 1024^3 bytes
+	sizeGB := float64(totalSize) / BytesToGB
+
+	fmt.Printf("✅ Total size calculated: %.2f GB (%d bytes)\n", sizeGB, totalSize)
+	return sizeGB, nil
 }
 
 func (s *backupServiceImpl) DeleteJob(JobID uint) error {
@@ -387,7 +442,7 @@ func (s *backupServiceImpl) UpdateJob(jobID uint, updatedJob *models.ScheduledJo
 	fmt.Printf("[UPDATE] Memperbarui Job ID: %d\n", jobID)
 
 	// 1. Cek apakah job exist
-	existingJob, err := s.JobRepo.FindJobByID(jobID)
+	_, err := s.JobRepo.FindJobByID(jobID)
 	if err != nil {
 		return fmt.Errorf("job tidak ditemukan: %w", err)
 	}
@@ -420,11 +475,6 @@ func (s *backupServiceImpl) UpdateJob(jobID uint, updatedJob *models.ScheduledJo
 
 	// ✅ Schedule cron bisa kosong (untuk ubah jadi manual job)
 	updates["schedule_cron"] = updatedJob.ScheduleCron
-
-	// ✅ IsActive harus explicit check
-	if updatedJob.IsActive != existingJob.IsActive {
-		updates["is_active"] = updatedJob.IsActive
-	}
 
 	updates["updated_at"] = time.Now()
 

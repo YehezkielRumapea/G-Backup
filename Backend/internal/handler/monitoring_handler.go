@@ -164,7 +164,6 @@ func (h *MonitoringHandler) GetAllJobs(c echo.Context) error {
 			"job_name":       job.JobName,
 			"operation_mode": job.OperationMode,
 			"schedule_cron":  job.ScheduleCron,
-			"is_active":      job.IsActive,
 		})
 	}
 

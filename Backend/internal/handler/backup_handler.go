@@ -63,7 +63,6 @@ func (h *BackupHandler) CreateNewJob(c echo.Context) error {
 		PreScript:       req.PreScript,
 		PostScript:      req.PostScript,
 		ScheduleCron:    req.ScheduleCron, // Jika "" -> Job Manual (Template)
-		IsActive:        true,
 		StatusQueue:     "PENDING",
 	}
 

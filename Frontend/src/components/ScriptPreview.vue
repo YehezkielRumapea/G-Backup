@@ -21,10 +21,6 @@
               <span class="line-count">{{ lineCount }} lines</span>
             </div>
             <div class="toolbar-right">
-              <button @click="copyToClipboard" class="toolbar-btn" :class="{ copied: isCopied }">
-                <span v-if="!isCopied">Copy</span>
-                <span v-else>Copied</span>
-              </button>
               <button @click="downloadScript" class="toolbar-btn">
                 Download
               </button>
@@ -148,20 +144,6 @@ function handleClose() {
   emit('close');
 }
 
-// Copy to clipboard
-async function copyToClipboard() {
-  try {
-    await navigator.clipboard.writeText(props.scriptContent);
-    isCopied.value = true;
-    
-    setTimeout(() => {
-      isCopied.value = false;
-    }, 2000);
-  } catch (error) {
-    console.error('Copy failed:', error);
-    alert('Failed to copy to clipboard');
-  }
-}
 
 // Download script
 function downloadScript() {

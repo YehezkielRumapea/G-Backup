@@ -43,7 +43,6 @@ func (h *RestoreHandler) TriggerRestore(c echo.Context) error {
 		RemoteName:      req.RemoteName,
 		DestinationPath: req.DestinationPath,
 		ScheduleCron:    "",
-		IsActive:        true,
 		StatusQueue:     "PENDING",
 	}
 
