@@ -202,7 +202,7 @@ func (s *backupServiceImpl) executeJobLifecycle(job models.ScheduledJob) {
 
 		// Round Robin Cleanup
 		fmt.Printf("[WORKER %d] 🔄 Checking for old backups...\n", job.ID)
-		if err := s.CleanupOldBackups(job.RemoteName, originalDestPath); err != nil {
+		if err := s.CleanupOldBackups(job.RemoteName, originalDestPath, job.MaxRetention); err != nil {
 			fmt.Printf("⚠️ [WORKER %d] Cleanup warning: %v\n", job.ID, err)
 		}
 	} else {
@@ -478,6 +478,13 @@ func (s *backupServiceImpl) UpdateJob(jobID uint, updatedJob *models.ScheduledJo
 
 	updates["updated_at"] = time.Now()
 
+	if updatedJob.MaxRetention > 0 {
+		if updatedJob.MaxRetention > 100 {
+			return fmt.Errorf("max retention tidak boleh lebih dari 100")
+		}
+		updates["max_retention"] = updatedJob.MaxRetention
+	}
+
 	// 3. ✅ Validate minimal 1 field (exclude updated_at)
 	if len(updates) <= 1 {
 		return fmt.Errorf("tidak ada field yang diubah")
@@ -492,11 +499,18 @@ func (s *backupServiceImpl) UpdateJob(jobID uint, updatedJob *models.ScheduledJo
 	return nil
 }
 
-func (s *backupServiceImpl) CleanupOldBackups(remoteName, destinationPath string) error {
-	const MAX_RETENTION = 10
+// CleanupOldBackups - UPDATED untuk menerima maxRetention sebagai parameter
+func (s *backupServiceImpl) CleanupOldBackups(remoteName, destinationPath string, maxRetention int) error {
+	// Validate maxRetention
+	if maxRetention < 1 {
+		maxRetention = 10
+		fmt.Printf("[Round Robin] Invalid maxRetention (%d), using default: %d\n", maxRetention, maxRetention)
+	}
 
-	fmt.Printf("[Round Robin] Checking backups in %s:%s...\n", remoteName, destinationPath)
+	fmt.Printf("[Round Robin] Checking backups in %s:%s (Max: %d)...\n",
+		remoteName, destinationPath, maxRetention)
 
+	// List file dari remote menggunakan rclone lsjson
 	listCmd := fmt.Sprintf("rclone lsjson %s:%s", remoteName, destinationPath)
 	output, err := exec.Command("bash", "-c", listCmd).Output()
 	if err != nil {
@@ -509,8 +523,10 @@ func (s *backupServiceImpl) CleanupOldBackups(remoteName, destinationPath string
 	}
 
 	var backupItems []RcloneFileInfo
+	// Regex untuk match file dengan format timestamp: _YYYYMMDD_HHMMSS
 	timestampPattern := regexp.MustCompile(`_\d{8}_\d{6}`)
 
+	// Filter file yang match pattern timestamp
 	for _, f := range files {
 		if timestampPattern.MatchString(f.Name) {
 			backupItems = append(backupItems, f)
@@ -518,19 +534,22 @@ func (s *backupServiceImpl) CleanupOldBackups(remoteName, destinationPath string
 	}
 
 	currentCount := len(backupItems)
-	fmt.Printf("[Round Robin] Found %d backup items (limit: %d)\n", currentCount, MAX_RETENTION)
+	fmt.Printf("[Round Robin] Found %d backup items (limit: %d)\n", currentCount, maxRetention)
 
-	if currentCount < MAX_RETENTION {
-		fmt.Printf("[Round Robin] No cleanup needed (%d/%d)\n", currentCount, MAX_RETENTION)
+	// Jika tidak perlu cleanup
+	if currentCount < maxRetention {
+		fmt.Printf("[Round Robin] No cleanup needed (%d/%d)\n", currentCount, maxRetention)
 		return nil
 	}
 
+	// Sort berdasarkan waktu modifikasi (ascending = oldest first)
 	sort.Slice(backupItems, func(i, j int) bool {
 		return backupItems[i].ModTime.Before(backupItems[j].ModTime)
 	})
 
-	itemsToDelete := currentCount - MAX_RETENTION + 1
-
+	// Hitung berapa yang perlu dihapus
+	// Jika ada 12 backup dan maxRetention=10, hapus 12-10+1 = 3
+	itemsToDelete := currentCount - maxRetention + 1
 	fmt.Printf("[Round Robin] Deleting %d oldest backup(s)...\n", itemsToDelete)
 
 	var deletedItems []string
@@ -545,6 +564,7 @@ func (s *backupServiceImpl) CleanupOldBackups(remoteName, destinationPath string
 			deleteCmd = fmt.Sprintf("rclone delete %s", fullPath)
 		}
 
+		// Execute delete command
 		if err := exec.Command("bash", "-c", deleteCmd).Run(); err != nil {
 			fmt.Printf("⚠️  [Round Robin] Failed to delete %s: %v\n", itemToDelete.Name, err)
 			continue
@@ -552,6 +572,7 @@ func (s *backupServiceImpl) CleanupOldBackups(remoteName, destinationPath string
 
 		deletedItems = append(deletedItems, itemToDelete.Name)
 
+		// Format output log
 		itemType := "file"
 		sizeStr := fmt.Sprintf("%.2f MB", float64(itemToDelete.Size)/(1024*1024))
 		if itemToDelete.IsDir {
@@ -567,6 +588,7 @@ func (s *backupServiceImpl) CleanupOldBackups(remoteName, destinationPath string
 		)
 	}
 
-	fmt.Printf("✅ [Round Robin] Cleanup complete. Deleted %d item(s). Space available for new backup.\n", len(deletedItems))
+	fmt.Printf("✅ [Round Robin] Cleanup complete. Deleted %d item(s). Space available for new backup.\n",
+		len(deletedItems))
 	return nil
 }

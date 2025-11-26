@@ -40,6 +40,25 @@
             <input type="text" id="backup-dest" v-model="backupForm.destination_path" required placeholder="/backups/database/" />
           </div>
 
+          <div class="form-group">
+            <label for="edit-retention">Max Retention (Round Robin Cleanup)</label>
+            <div class="input-with-hint">
+              <input 
+                type="number" 
+                id="edit-retention" 
+                v-model.number="backupForm.max_retention" 
+                min="1" 
+                max="100"
+                class="form-input"
+                placeholder="10"
+              />
+            </div>
+            <small class="hint">
+              Jumlah file backup terakhir yang disimpan. File yang lebih tua dari jumlah ini akan dihapus otomatis untuk menghemat storage.
+              <br><strong>Default: 10</strong>
+            </small>
+          </div>
+
           <!-- Schedule Section -->
           <div class="schedule-section">
             <div class="section-header">
@@ -202,7 +221,8 @@ const backupForm = ref({
   destination_path: '',
   schedule_cron: '',
   pre_script: '',
-  post_script: ''
+  post_script: '',
+  max_retention: 10
 })
 
 const remoteList = ref([])

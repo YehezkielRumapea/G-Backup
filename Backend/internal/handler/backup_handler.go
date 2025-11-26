@@ -20,8 +20,9 @@ type BackupRequestDTO struct {
 	ScheduleCron    string `json:"schedule_cron"` // Kosong jika Manual
 
 	// Script Mentah dari User
-	PreScript  string `json:"pre_script"`
-	PostScript string `json:"post_script"`
+	PreScript    string `json:"pre_script"`
+	PostScript   string `json:"post_script"`
+	MaxRetention int    `json:"max_retention" validate:"min=1,max=100"`
 }
 
 type BackupHandler struct {
@@ -46,7 +47,18 @@ func (h *BackupHandler) CreateNewJob(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Format input JSON tidak valid."})
 	}
 
-	// 2. Dapatkan User ID (dari Middleware JWT)
+	// 2. Validasi manual MaxRetention (jika tidak dikirim atau 0)
+	if req.MaxRetention <= 0 {
+		req.MaxRetention = 10 // Default 10 jika tidak diisi atau invalid
+		fmt.Printf("[Handler] MaxRetention tidak valid, menggunakan default: %d\n", req.MaxRetention)
+	}
+
+	if req.MaxRetention > 100 {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "MaxRetention tidak boleh lebih dari 100",
+		})
+	}
+
 	// (Di implementasi nyata, ambil dari context: userID := c.Get("userID").(uint))
 	userID := uint(1) // Placeholder untuk admin tunggal
 
@@ -64,6 +76,7 @@ func (h *BackupHandler) CreateNewJob(c echo.Context) error {
 		PostScript:      req.PostScript,
 		ScheduleCron:    req.ScheduleCron, // Jika "" -> Job Manual (Template)
 		StatusQueue:     "PENDING",
+		MaxRetention:    req.MaxRetention,
 	}
 
 	// 4. Panggil Service untuk Dispatch Job

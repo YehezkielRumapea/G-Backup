@@ -1,16 +1,20 @@
 <template>
-  <div class="gdrive-browser">
+  <div class="file-browser">
     <!-- Header -->
     <div class="browser-header">
-      <h3>📁 Browse {{ remoteName }}</h3>
-      <div class="header-actions">
-        <button v-if="currentPath !== '/'" @click="goBack" class="btn-back">
-          ← Back
-        </button>
+      <div class="header-title">
+        <h3>{{ remoteName }}</h3>
       </div>
+      <button 
+        v-if="currentPath !== '/'" 
+        @click="goBack" 
+        class="btn-back"
+      >
+        Back
+      </button>
     </div>
 
-    <!-- Breadcrumb Navigation -->
+    <!-- Breadcrumb -->
     <div class="breadcrumb">
       <button 
         @click="navigateTo('/')" 
@@ -20,7 +24,7 @@
         Root
       </button>
       <template v-for="(segment, index) in pathSegments" :key="index">
-        <span class="breadcrumb-separator">/</span>
+        <span class="separator">/</span>
         <button 
           @click="navigateTo(buildPath(index))"
           :class="{ active: buildPath(index) === currentPath }"
@@ -31,96 +35,83 @@
       </template>
     </div>
 
-    <!-- Selected Item Info (Display Only) -->
-    <div v-if="selectedItem" class="selected-banner">
-      <div class="selected-icon">
-        {{ selectedItem.is_dir ? '📁' : getFileIcon(selectedItem.name) }}
-      </div>
-      <div class="selected-content">
-        <strong>✅ Selected:</strong> {{ selectedItem.name }}
-        <br>
-        <small>{{ selectedItem.is_dir ? 'Folder' : formatFileSize(selectedItem.size) }} • {{ currentPath }}</small>
+    <!-- Selected Item Info -->
+    <div v-if="selectedItem" class="selected-info">
+      <div class="selected-item">
+        <span class="item-type">{{ selectedItem.is_dir ? 'Folder' : 'File' }}</span>
+        <span class="item-name">{{ selectedItem.name }}</span>
+        <span class="item-size" v-if="!selectedItem.is_dir">{{ formatFileSize(selectedItem.size) }}</span>
       </div>
     </div>
 
-    <!-- Loading State -->
-    <div v-if="isLoading" class="loading">
+    <!-- Loading -->
+    <div v-if="isLoading" class="state-container loading">
       <div class="spinner"></div>
-      <p>Loading files...</p>
+      <p>Loading...</p>
     </div>
 
-    <!-- Error State -->
-    <div v-else-if="error" class="error-message">
-      <p>❌ {{ error }}</p>
-      <button @click="loadFiles" class="btn-retry">Try Again</button>
+    <!-- Error -->
+    <div v-else-if="error" class="state-container error">
+      <p class="error-text">{{ error }}</p>
+      <button @click="loadFiles" class="btn-retry">Retry</button>
     </div>
 
-    <!-- Empty State -->
-    <div v-else-if="files.length === 0" class="empty-state">
-      <p>📭 No files or folders found</p>
+    <!-- Empty -->
+    <div v-else-if="files.length === 0" class="state-container empty">
+      <p>No items found</p>
     </div>
 
     <!-- Files List -->
-    <div v-else class="files-container">
-      <!-- Folder/File Items -->
+    <div v-else class="files-list">
       <div 
         v-for="file in files" 
         :key="file.path"
-        :class="['file-item', { 
+        :class="['file-row', { 
           'is-dir': file.is_dir,
           'is-selected': selectedItem?.path === file.path
         }]"
       >
-        <!-- Folder: Double-click to enter, Click to select -->
+        <!-- Folder -->
         <template v-if="file.is_dir">
           <div 
             class="file-content"
             @click="selectItem(file)"
             @dblclick="navigateTo(file.path)"
           >
-            <div class="file-icon">📁</div>
-            <div class="file-info">
+            <span class="file-type-icon">📂</span>
+            <div class="file-meta">
               <div class="file-name">{{ file.name }}</div>
-              <div class="file-details">
-                Folder • {{ formatDate(file.mod_time) }}
-              </div>
+              <div class="file-time">{{ formatDate(file.mod_time) }}</div>
             </div>
           </div>
-          <div class="file-badge">🗂️ Folder</div>
         </template>
 
-        <!-- File: Click to select -->
+        <!-- File -->
         <template v-else>
           <div 
             class="file-content"
             @click="selectItem(file)"
           >
-            <div class="file-icon">{{ getFileIcon(file.name) }}</div>
-            <div class="file-info">
+            <span class="file-type-icon">📄</span>
+            <div class="file-meta">
               <div class="file-name">{{ file.name }}</div>
-              <div class="file-details">
-                {{ formatFileSize(file.size) }} • {{ formatDate(file.mod_time) }}
-              </div>
+              <div class="file-time">{{ formatFileSize(file.size) }} • {{ formatDate(file.mod_time) }}</div>
             </div>
           </div>
-          <div class="file-badge">📄 File</div>
         </template>
       </div>
 
-      <!-- Total Size Info -->
-      <div class="total-info">
-        <p>📊 Total size: {{ formatFileSize(totalSize) }}</p>
-        <p>📦 {{ files.length }} items</p>
+      <!-- Summary -->
+      <div class="files-summary">
+        <span>{{ files.length }} items</span>
+        <span>•</span>
+        <span>{{ formatFileSize(totalSize) }}</span>
       </div>
     </div>
 
-    <!-- Instructions -->
-    <div class="instructions">
-      <small>
-        💡 <strong>Folder:</strong> Click to select, Double-click to open<br>
-        💡 <strong>File:</strong> Click to select<br>
-        💡 Selection otomatis disimpan
-      </small>
+    <!-- Help Text -->
+    <div class="help-text">
+      <small>Click to select • Double-click folder to open</small>
     </div>
   </div>
 </template>
@@ -133,7 +124,7 @@ import driveService from '@/services/driveService';
 const props = defineProps({
   remoteName: {
     type: String,
-    default: 'Gdrive1'
+    default: 'Remote'
   },
   initialPath: {
     type: String,
@@ -161,11 +152,7 @@ const pathSegments = computed(() => {
     .map(s => s);
 });
 
-// ============================================
-// Methods
-// ============================================
-
-// Load files dari API
+// Load files
 async function loadFiles() {
   isLoading.value = true;
   error.value = null;
@@ -174,17 +161,11 @@ async function loadFiles() {
   selectedItem.value = null;
 
   try {
-    console.log(`🔄 Loading files from ${props.remoteName}:${currentPath.value}`);
-    
-    // Call service untuk browse files
     const response = await driveService.browseFiles(props.remoteName, currentPath.value);
     
     files.value = response.files || [];
     totalSize.value = response.total_size || 0;
-
-    console.log(`✅ Loaded ${files.value.length} items`);
     
-    // Emit navigation event
     emit('navigate', {
       remote: props.remoteName,
       path: currentPath.value,
@@ -192,19 +173,16 @@ async function loadFiles() {
     });
 
   } catch (err) {
-    error.value = err.response?.data?.error || err.message || 'Failed to load files';
-    console.error('❌ Browser error:', error.value);
+    error.value = err.response?.data?.error || err.message || 'Failed to load';
   } finally {
     isLoading.value = false;
   }
 }
 
-// Select item dan langsung emit (tanpa perlu confirm button)
+// Select item
 function selectItem(file) {
   selectedItem.value = file;
-  console.log(`✅ Selected: ${file.name} (${file.is_dir ? 'Folder' : 'File'})`);
   
-  // Auto-emit langsung
   emit('select-file', {
     name: file.name,
     path: file.path,
@@ -212,17 +190,15 @@ function selectItem(file) {
     is_dir: file.is_dir,
     remote: props.remoteName
   });
-  
-  console.log(`🎯 Selection emitted: ${file.name}`);
 }
 
-// Navigate ke path tertentu (untuk double-click folder)
+// Navigate
 function navigateTo(path) {
   currentPath.value = path;
   loadFiles();
 }
 
-// Go back ke parent folder
+// Go back
 function goBack() {
   const parts = currentPath.value
     .split('/')
@@ -233,36 +209,13 @@ function goBack() {
   navigateTo(parentPath);
 }
 
-// Build path dari breadcrumb index
+// Build path
 function buildPath(index) {
   const parts = pathSegments.value.slice(0, index + 1);
   return '/' + parts.join('/');
 }
 
-// ============================================
-// Utility Functions
-// ============================================
-
-// Get file icon berdasarkan extension
-function getFileIcon(fileName) {
-  const ext = fileName.split('.').pop().toLowerCase();
-  
-  const iconMap = {
-    'zip': '🗜️', 'rar': '🗜️', '7z': '🗜️', 'tar': '🗜️', 'gz': '🗜️',
-    'pdf': '📄', 'doc': '📝', 'docx': '📝', 'txt': '📄', 
-    'xlsx': '📊', 'csv': '📊', 'xls': '📊', 'ppt': '🎞️', 'pptx': '🎞️',
-    'jpg': '🖼️', 'jpeg': '🖼️', 'png': '🖼️', 'gif': '🖼️', 'svg': '🖼️', 'webp': '🖼️',
-    'mp4': '🎬', 'avi': '🎬', 'mkv': '🎬', 'mov': '🎬', 'flv': '🎬',
-    'mp3': '🎵', 'wav': '🎵', 'flac': '🎵', 'm4a': '🎵',
-    'js': '⚙️', 'py': '⚙️', 'go': '⚙️', 'java': '⚙️', 'cpp': '⚙️', 
-    'json': '⚙️', 'xml': '⚙️', 'html': '⚙️', 'css': '⚙️',
-    'sql': '🗄️', 'db': '🗄️', 'sqlite': '🗄️',
-  };
-  
-  return iconMap[ext] || '📄';
-}
-
-// Format file size ke human readable
+// Format file size
 function formatFileSize(bytes) {
   if (!bytes || bytes === 0) return '0 B';
   
@@ -275,12 +228,12 @@ function formatFileSize(bytes) {
 
 // Format date
 function formatDate(dateString) {
-  if (!dateString) return 'N/A';
+  if (!dateString) return '-';
   
   try {
     const date = new Date(dateString);
     return date.toLocaleDateString('id-ID', {
-      year: 'numeric',
+      year: '2-digit',
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
@@ -291,10 +244,7 @@ function formatDate(dateString) {
   }
 }
 
-// ============================================
 // Lifecycle
-// ============================================
-
 onMounted(() => {
   currentPath.value = props.initialPath;
   loadFiles();
@@ -302,15 +252,15 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.gdrive-browser {
-  background: #fff;
-  border: 1px solid #e5e5e5;
-  border-radius: 8px;
-  padding: 1.5rem;
-  max-height: 600px;
+.file-browser {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.75rem;
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  padding: 1rem;
+  max-height: 600px;
 }
 
 /* Header */
@@ -318,84 +268,54 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-bottom: 1rem;
-  border-bottom: 2px solid #f0f0f0;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #e5e5e5;
 }
 
-.browser-header h3 {
+.header-title h3 {
   margin: 0;
-  font-size: 1.125rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: #1a1a1a;
 }
 
-.header-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
 .btn-back {
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.875rem;
-  font-weight: 500;
-  transition: all 0.2s;
-  border: 1px solid #e5e5e5;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  border: 1px solid #d5d5d5;
   background: #f5f5f5;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
   color: #666;
+  font-weight: 500;
 }
 
 .btn-back:hover {
-  background: #e5e5e5;
-  border-color: #d4d4d4;
-}
-
-/* Selected Banner */
-.selected-banner {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem;
-  background: #f0fdf4;
-  border: 1px solid #86efac;
-  border-radius: 6px;
-}
-
-.selected-icon {
-  font-size: 1.5rem;
-  flex-shrink: 0;
-}
-
-.selected-content {
-  flex: 1;
-  font-size: 0.875rem;
-  color: #166534;
-}
-
-.selected-content strong {
-  color: #15803d;
+  background: #efefef;
+  border-color: #ccc;
 }
 
 /* Breadcrumb */
 .breadcrumb {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.25rem;
+  font-size: 0.8rem;
   overflow-x: auto;
-  padding: 0.5rem 0;
-  font-size: 0.875rem;
+  padding: 0.25rem 0;
 }
 
 .breadcrumb-item {
-  background: transparent;
+  background: none;
   border: none;
-  color: #3b82f6;
+  color: #0066cc;
   cursor: pointer;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  transition: all 0.2s;
+  padding: 0.2rem 0.4rem;
+  border-radius: 3px;
+  transition: all 0.15s;
   white-space: nowrap;
+  font-size: 0.8rem;
 }
 
 .breadcrumb-item:hover {
@@ -403,31 +323,83 @@ onMounted(() => {
 }
 
 .breadcrumb-item.active {
-  color: #1a1a1a;
+  color: #333;
   font-weight: 600;
-  background: #f0f0f0;
+  background: #f5f5f5;
 }
 
-.breadcrumb-separator {
-  color: #999;
-  margin: 0 0.25rem;
+.separator {
+  color: #bbb;
+  margin: 0 0.1rem;
 }
 
-/* Loading */
-.loading {
+/* Selected Info */
+.selected-info {
+  padding: 0.6rem;
+  background: #f0f8ff;
+  border: 1px solid #d4e8f5;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.selected-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.item-type {
+  display: inline-block;
+  padding: 0.2rem 0.4rem;
+  background: #0066cc;
+  color: white;
+  border-radius: 3px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  min-width: 45px;
+  text-align: center;
+}
+
+.item-name {
+  flex: 1;
+  font-weight: 500;
+  color: #1a1a1a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.item-size {
+  color: #666;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+/* State Containers */
+.state-container {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 2rem;
-  gap: 1rem;
+  flex: 1;
+}
+
+.state-container p {
+  margin: 0.5rem 0 0 0;
+  color: #666;
+  font-size: 0.85rem;
+}
+
+.loading {
+  gap: 0.75rem;
 }
 
 .spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid #e5e5e5;
-  border-top-color: #3b82f6;
+  width: 32px;
+  height: 32px;
+  border: 2px solid #e5e5e5;
+  border-top-color: #0066cc;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -436,175 +408,149 @@ onMounted(() => {
   to { transform: rotate(360deg); }
 }
 
-/* Error */
-.error-message {
-  background: #fee2e2;
-  border: 1px solid #fecaca;
-  color: #991b1b;
-  padding: 1rem;
-  border-radius: 6px;
+.error {
+  gap: 0.75rem;
+}
+
+.error-text {
+  color: #c41e3a;
   text-align: center;
+  margin: 0;
 }
 
 .btn-retry {
-  background: #991b1b;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.8rem;
+  background: #c41e3a;
   color: white;
   border: none;
-  padding: 0.5rem 1rem;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 0.875rem;
   font-weight: 500;
-  margin-top: 0.5rem;
+  transition: all 0.15s;
 }
 
-/* Empty State */
-.empty-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem;
+.btn-retry:hover {
+  background: #a01730;
+}
+
+.empty {
   color: #999;
-  font-size: 0.9375rem;
 }
 
-/* Files Container */
-.files-container {
+/* Files List */
+.files-list {
   flex: 1;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.25rem;
+  overflow-y: auto;
+  min-height: 200px;
 }
 
-.files-container::-webkit-scrollbar {
-  width: 6px;
+.files-list::-webkit-scrollbar {
+  width: 5px;
 }
 
-.files-container::-webkit-scrollbar-thumb {
-  background: #d4d4d4;
+.files-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.files-list::-webkit-scrollbar-thumb {
+  background: #d0d0d0;
   border-radius: 3px;
 }
 
-/* File Item */
-.file-item {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.75rem;
-  border: 2px solid #f0f0f0;
-  border-radius: 6px;
+.files-list::-webkit-scrollbar-thumb:hover {
+  background: #b0b0b0;
+}
+
+/* File Row */
+.file-row {
+  padding: 0.6rem;
+  border: 1px solid #e5e5e5;
+  border-radius: 4px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s;
   background: #fff;
 }
 
-.file-item:hover {
-  background: #f9f9f9;
-  border-color: #e5e5e5;
+.file-row:hover {
+  background: #fafafa;
+  border-color: #d0d0d0;
 }
 
-.file-item.is-selected {
-  background: #f0fdf4;
-  border-color: #86efac;
-}
-
-.file-item.is-dir:hover {
-  border-color: #3b82f6;
+.file-row.is-selected {
+  background: #f0f8ff;
+  border-color: #0066cc;
 }
 
 .file-content {
-  flex: 1;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.6rem;
   min-width: 0;
 }
 
-.file-icon {
-  font-size: 1.5rem;
+.file-type-icon {
+  font-size: 1.1rem;
   flex-shrink: 0;
 }
 
-.file-info {
+.file-meta {
   flex: 1;
   min-width: 0;
 }
 
 .file-name {
+  font-size: 0.85rem;
   font-weight: 500;
   color: #1a1a1a;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 0.9375rem;
 }
 
-.file-details {
-  font-size: 0.8125rem;
+.file-time {
+  font-size: 0.75rem;
   color: #999;
-  margin-top: 0.25rem;
-}
-
-.file-badge {
-  font-size: 0.75rem;
-  padding: 0.25rem 0.5rem;
-  background: #f0f0f0;
-  border-radius: 4px;
-  color: #666;
-  flex-shrink: 0;
+  margin-top: 0.1rem;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* Total Info */
-.total-info {
-  padding: 1rem 0;
-  border-top: 1px solid #f0f0f0;
-  font-size: 0.8125rem;
-  color: #666;
-}
-
-.total-info p {
-  margin: 0.25rem 0;
-}
-
-/* Instructions */
-.instructions {
-  background: #f0f8ff;
-  border: 1px solid #b3d9ff;
-  border-radius: 6px;
-  padding: 0.75rem 1rem;
+/* Summary */
+.files-summary {
+  padding-top: 0.6rem;
+  border-top: 1px solid #e5e5e5;
   font-size: 0.75rem;
-  color: #0c4a6e;
+  color: #999;
+  display: flex;
+  gap: 0.3rem;
 }
 
-.instructions small {
-  line-height: 1.6;
+/* Help Text */
+.help-text {
+  padding: 0.5rem 0;
+  font-size: 0.75rem;
+  color: #999;
+  text-align: center;
 }
 
 /* Responsive */
-@media (max-width: 768px) {
-  .gdrive-browser {
+@media (max-width: 640px) {
+  .file-browser {
+    padding: 0.75rem;
     max-height: 400px;
-    padding: 1rem;
   }
 
-  .browser-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
+  .file-name {
+    font-size: 0.8rem;
   }
 
-  .header-actions {
-    width: 100%;
-  }
-
-  .btn-back {
-    width: 100%;
-  }
-
-  .file-item {
-    gap: 0.5rem;
+  .file-time {
+    font-size: 0.7rem;
   }
 }
 </style>

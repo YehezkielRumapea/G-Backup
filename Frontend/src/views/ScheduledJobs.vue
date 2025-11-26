@@ -32,8 +32,7 @@
       <button @click="fetchData" class="retry-btn">Coba Lagi</button>
     </div>
 
-    <div v-if="!isLoading && jobs.length === 0 && !errorMessage" class="empty-state">
-      <p>Tidak ada job terjadwal</p>
+    <div v-if="!isLoading && jobs && jobs.length === 0 && !errorMessage" class="empty-state">      <p>Tidak ada job terjadwal</p>
       <router-link to="/create" class="btn-create">
         Buat Job Terjadwal
       </router-link>
@@ -123,7 +122,8 @@ async function fetchData() {
   
   try {
     const data = await monitoringService.getScheduledJobs();
-    jobs.value = data;
+    jobs.value = Array.isArray(data) ? data : [];
+
   } catch (error) {
     errorMessage.value = error.response?.data?.error || 'Gagal memuat data scheduled jobs.';
     console.error("Fetch Scheduled Jobs Error:", error);

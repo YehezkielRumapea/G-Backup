@@ -14,13 +14,13 @@
           <div class="step-indicator">
             <div :class="['step', { active: currentStep >= 1, completed: currentStep > 1 }]">
               <div class="step-number">1</div>
-              <div class="step-label">Select Drive</div>
+              <div class="step-label">Remote</div>
             </div>
             <div class="step-line" :class="{ completed: currentStep > 1 }"></div>
 
             <div :class="['step', { active: currentStep >= 2, completed: currentStep > 2 }]">
               <div class="step-number">2</div>
-              <div class="step-label">Select File</div>
+              <div class="step-label">Select</div>
             </div>
             <div class="step-line" :class="{ completed: currentStep > 2 }"></div>
 
@@ -32,22 +32,22 @@
 
           <!-- Step 1: Select Remote Drive -->
           <div v-show="currentStep === 1" class="step-content">
-            <h3>☁️ Pilih Cloud Storage</h3>
-            <p class="form-description">Pilih drive cloud mana yang berisi file backup</p>
+            <h3>Select Remote Storage</h3>
+            <p class="form-description">Choose the cloud storage where your backup is located</p>
 
-            <div v-if="loadingRemotes" class="loading">
+            <div v-if="loadingRemotes" class="state-loading">
               <div class="spinner"></div>
-              <p>Loading drives...</p>
+              <p>Loading remotes...</p>
             </div>
 
-            <div v-else-if="remotesList.length === 0" class="empty-state">
-              <p>❌ Tidak ada drive ditemukan</p>
+            <div v-else-if="remotesList.length === 0" class="state-empty">
+              <p>No remotes found</p>
             </div>
 
             <div v-else class="form-group">
               <label for="restore-remote">Remote Name *</label>
               <select id="restore-remote" v-model="selectedRemote" required>
-                <option value="" disabled>Pilih Drive</option>
+                <option value="" disabled>Choose a remote...</option>
                 <option v-for="remote in remotesList" :key="remote.name" :value="remote.name">
                   {{ remote.name }}
                 </option>
@@ -55,25 +55,25 @@
             </div>
 
             <div class="step-actions">
-              <button type="button" @click="close" class="btn-secondary">Batal</button>
+              <button type="button" @click="close" class="btn-secondary">Cancel</button>
               <button 
                 type="button"
                 @click="goToStep(2)" 
-                class="btn-submit"
+                class="btn-primary"
                 :disabled="!selectedRemote"
               >
-                Lanjut →
+                Next
               </button>
             </div>
           </div>
 
           <!-- Step 2: Select File/Folder -->
           <div v-show="currentStep === 2" class="step-content">
-            <h3>📦 Pilih File atau Folder</h3>
-            <p class="form-description">Pilih file/folder dari {{ selectedRemote }} yang ingin di-restore</p>
+            <h3>Select File or Folder</h3>
+            <p class="form-description">Choose the file/folder from {{ selectedRemote }} to restore</p>
 
             <div class="file-browser-wrapper">
-              <GDriveBrowser
+              <FileBrowser
                 v-if="selectedRemote"
                 :remote-name="selectedRemote"
                 :initial-path="'/'"
@@ -81,55 +81,53 @@
               />
             </div>
 
-            <div v-if="selectedFile" class="selected-info">
-              <div class="info-item">
-                <strong>✅ Selected:</strong> {{ selectedFile.name }}
+            <div v-if="selectedFile" class="selected-display">
+              <div class="selected-item">
+                <span class="item-type">{{ selectedFile.is_dir ? 'Folder' : 'File' }}</span>
+                <span class="item-name">{{ selectedFile.name }}</span>
               </div>
-              <div class="info-item">
-                <strong>Path:</strong> {{ selectedFile.path }}
-              </div>
-              <div class="info-item">
-                <strong>Type:</strong> {{ selectedFile.is_dir ? '📁 Folder' : '📄 File' }}
+              <div class="selected-meta">
+                <small>{{ selectedFile.path }}</small>
               </div>
             </div>
 
             <div class="step-actions">
-              <button type="button" @click="goToStep(1)" class="btn-secondary">← Kembali</button>
+              <button type="button" @click="goToStep(1)" class="btn-secondary">Back</button>
               <button 
                 type="button"
                 @click="goToStep(3)" 
-                class="btn-submit"
+                class="btn-primary"
                 :disabled="!selectedFile"
               >
-                Lanjut →
+                Next
               </button>
             </div>
           </div>
 
           <!-- Step 3: Set Destination Path -->
           <div v-show="currentStep === 3" class="step-content">
-            <h3>🎯 Lokasi Penyimpanan</h3>
-            <p class="form-description">Tentukan lokasi di server lokal untuk menyimpan file yang di-restore</p>
+            <h3>Set Restore Destination</h3>
+            <p class="form-description">Specify where to restore the file on your server</p>
 
             <!-- Review -->
-            <div class="review-box">
+            <div class="review-section">
               <div class="review-item">
-                <strong>📍 Drive:</strong>
-                <span>{{ selectedRemote }}</span>
+                <span class="review-label">Remote:</span>
+                <span class="review-value">{{ selectedRemote }}</span>
               </div>
               <div class="review-item">
-                <strong>📦 File:</strong>
-                <span>{{ selectedFile?.name }}</span>
+                <span class="review-label">Source:</span>
+                <span class="review-value">{{ selectedFile?.name }}</span>
               </div>
               <div class="review-item">
-                <strong>Path:</strong>
-                <span>{{ selectedRemote }}:{{ selectedFile?.path }}</span>
+                <span class="review-label">Path:</span>
+                <span class="review-value">{{ selectedRemote }}:{{ selectedFile?.path }}</span>
               </div>
             </div>
 
             <form @submit.prevent="handleRestoreSubmit" class="config-form">
               <div class="form-group">
-                <label for="restore-dest">Lokasi Penyimpanan di Server *</label>
+                <label for="restore-dest">Destination Path *</label>
                 <input 
                   type="text" 
                   id="restore-dest" 
@@ -137,32 +135,32 @@
                   required 
                   placeholder="/home/user/restore/"
                 />
-                <small class="hint">Contoh: /home/user/restore atau /opt/backups</small>
+                <small class="hint">Example: /home/user/restore or /opt/backups</small>
               </div>
 
               <transition name="fade">
-                <div v-if="errorMessage" class="message error">
+                <div v-if="errorMessage" class="alert alert-error">
                   {{ errorMessage }}
                 </div>
               </transition>
 
               <transition name="fade">
-                <div v-if="successMessage" class="message success">
+                <div v-if="successMessage" class="alert alert-success">
                   {{ successMessage }}
                 </div>
               </transition>
 
               <div class="step-actions">
                 <button type="button" @click="goToStep(2)" class="btn-secondary" :disabled="isLoading">
-                  ← Kembali
+                  Back
                 </button>
                 <button 
                   type="submit" 
                   :disabled="isLoading || !destinationPath" 
-                  class="btn-restore"
+                  class="btn-submit"
                 >
-                  <span v-if="isLoading">Memulai Restore...</span>
-                  <span v-else>🚀 Mulai Restore</span>
+                  <span v-if="isLoading">Starting Restore...</span>
+                  <span v-else>Start Restore</span>
                 </button>
               </div>
             </form>
@@ -175,9 +173,9 @@
 
 <script setup>
 import { ref, watch } from 'vue'
-import GDriveBrowser from '@/components/GDriveBrowser.vue'
+import FileBrowser from '@/components/GDriveBrowser.vue'
 import jobService from '@/services/jobService'
-import driveService from '../services/driveService'
+import driveService from '@/services/driveService'
 
 const props = defineProps({
   isVisible: { type: Boolean, default: false }
@@ -236,7 +234,7 @@ function goToStep(step) {
 // Submit restore
 async function handleRestoreSubmit() {
   if (!selectedRemote.value || !selectedFile.value || !destinationPath.value) {
-    errorMessage.value = 'Semua field harus diisi'
+    errorMessage.value = 'All fields must be filled'
     return
   }
 
@@ -252,13 +250,13 @@ async function handleRestoreSubmit() {
       job_name: `Restore ${selectedFile.value.name}`
     })
 
-    successMessage.value = response.message || 'Restore job berhasil dimulai!'
+    successMessage.value = response.message || 'Restore job started successfully!'
     emit('success')
 
     setTimeout(() => close(), 1500)
   } catch (error) {
-    console.error('Trigger restore error:', error)
-    errorMessage.value = error.response?.data?.error || 'Gagal memulai restore'
+    console.error('Restore error:', error)
+    errorMessage.value = error.response?.data?.error || 'Failed to start restore'
   } finally {
     isLoading.value = false
   }
@@ -289,7 +287,7 @@ watch(() => props.isVisible, (newVal) => {
 </script>
 
 <style scoped>
-/* Modal */
+/* Modal Overlay */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -318,8 +316,8 @@ watch(() => props.isVisible, (newVal) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.25rem 1.5rem;
-  background: #fafafa;
+  padding: 1rem 1.25rem;
+  background: #f9f9f9;
   border-bottom: 1px solid #e5e5e5;
   position: sticky;
   top: 0;
@@ -328,7 +326,7 @@ watch(() => props.isVisible, (newVal) => {
 
 .modal-header h2 {
   margin: 0;
-  font-size: 1.125rem;
+  font-size: 1rem;
   font-weight: 600;
   color: #1a1a1a;
 }
@@ -346,23 +344,23 @@ watch(() => props.isVisible, (newVal) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: all 0.15s;
 }
 
 .close-btn:hover {
-  background: #f5f5f5;
-  border-color: #1a1a1a;
+  background: #f0f0f0;
+  border-color: #ccc;
   color: #1a1a1a;
 }
 
 /* Restore View */
 .restore-view {
-  padding: 1.5rem;
+  padding: 1.25rem;
 }
 
 /* Step Content */
 .step-content {
-  animation: fadeIn 0.3s ease-in;
+  animation: fadeIn 0.25s ease-in;
 }
 
 @keyframes fadeIn {
@@ -371,15 +369,16 @@ watch(() => props.isVisible, (newVal) => {
 }
 
 .step-content h3 {
-  margin: 0 0 0.5rem 0;
-  font-size: 1.25rem;
+  margin: 0 0 0.25rem 0;
+  font-size: 1.05rem;
+  font-weight: 600;
   color: #1a1a1a;
 }
 
 .form-description {
   color: #666;
-  margin: 0 0 1.5rem 0;
-  font-size: 0.9375rem;
+  margin: 0 0 1.25rem 0;
+  font-size: 0.8rem;
 }
 
 /* Step Indicator */
@@ -387,8 +386,8 @@ watch(() => props.isVisible, (newVal) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 2rem;
-  gap: 0.5rem;
+  margin-bottom: 1.75rem;
+  gap: 0.25rem;
 }
 
 .step {
@@ -399,8 +398,8 @@ watch(() => props.isVisible, (newVal) => {
 }
 
 .step-number {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: #f0f0f0;
   border: 2px solid #e5e5e5;
@@ -409,13 +408,13 @@ watch(() => props.isVisible, (newVal) => {
   justify-content: center;
   font-weight: 600;
   color: #666;
-  font-size: 0.875rem;
-  transition: all 0.3s;
+  font-size: 0.85rem;
+  transition: all 0.2s;
 }
 
 .step.active .step-number {
-  background: #3b82f6;
-  border-color: #3b82f6;
+  background: #0066cc;
+  border-color: #0066cc;
   color: white;
 }
 
@@ -426,10 +425,10 @@ watch(() => props.isVisible, (newVal) => {
 }
 
 .step-label {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 500;
   color: #666;
-  margin-top: 0.375rem;
+  margin-top: 0.3rem;
   text-align: center;
 }
 
@@ -437,7 +436,7 @@ watch(() => props.isVisible, (newVal) => {
   flex: 1;
   height: 2px;
   background: #e5e5e5;
-  transition: all 0.3s;
+  transition: all 0.2s;
 }
 
 .step-line.completed {
@@ -446,142 +445,113 @@ watch(() => props.isVisible, (newVal) => {
 
 /* File Browser */
 .file-browser-wrapper {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
   border: 1px solid #e5e5e5;
-  border-radius: 8px;
+  border-radius: 6px;
   overflow: hidden;
 }
 
-/* Selected Info */
-.selected-info {
-  background: #f0fdf4;
-  border: 1px solid #86efac;
-  border-radius: 6px;
-  padding: 1rem;
-  margin-bottom: 1.5rem;
+/* Selected Display */
+.selected-display {
+  background: #f0f8ff;
+  border: 1px solid #d4e8f5;
+  border-radius: 4px;
+  padding: 0.75rem;
+  margin-bottom: 1.25rem;
 }
 
-.info-item {
-  font-size: 0.875rem;
-  padding: 0.25rem 0;
-  color: #166534;
+.selected-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.3rem;
 }
 
-.info-item strong {
+.item-type {
+  display: inline-block;
+  padding: 0.2rem 0.4rem;
+  background: #0066cc;
+  color: white;
+  border-radius: 3px;
+  font-size: 0.65rem;
   font-weight: 600;
+  min-width: 40px;
+  text-align: center;
 }
 
-/* Review Box */
-.review-box {
+.item-name {
+  font-weight: 500;
+  color: #1a1a1a;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.selected-meta {
+  font-size: 0.75rem;
+  color: #666;
+}
+
+/* Review Section */
+.review-section {
   background: #f9f9f9;
   border: 1px solid #e5e5e5;
-  border-radius: 8px;
-  padding: 1rem;
-  margin-bottom: 1.5rem;
+  border-radius: 4px;
+  padding: 0.75rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.8rem;
 }
 
 .review-item {
   display: flex;
   justify-content: space-between;
-  padding: 0.5rem 0;
+  padding: 0.4rem 0;
   border-bottom: 1px solid #e5e5e5;
-  font-size: 0.875rem;
 }
 
 .review-item:last-child {
   border-bottom: none;
 }
 
-.review-item strong {
-  color: #1a1a1a;
-  min-width: 100px;
+.review-label {
+  color: #666;
+  font-weight: 500;
+  min-width: 70px;
 }
 
-.review-item span {
-  color: #3b82f6;
+.review-value {
+  color: #0066cc;
   font-weight: 500;
   text-align: right;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* Form */
-.config-form {
-  width: 100%;
-}
-
-/* Form Group */
-.form-group {
-  margin-bottom: 1.25rem;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
-  color: #1a1a1a;
-  font-size: 0.875rem;
-}
-
-.form-group select,
-.form-group input[type="text"] {
-  width: 100%;
-  padding: 0.625rem 0.875rem;
-  border: 1px solid #e5e5e5;
-  border-radius: 6px;
-  font-size: 0.9375rem;
-  transition: all 0.2s;
-  box-sizing: border-box;
-}
-
-.form-group select:focus,
-.form-group input:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.hint {
-  display: block;
-  margin-top: 0.375rem;
-  font-size: 0.8125rem;
-  color: #666;
-}
-
-/* Messages */
-.message {
-  padding: 0.875rem 1rem;
-  border-radius: 6px;
-  margin-bottom: 1rem;
-  font-weight: 500;
-  font-size: 0.9375rem;
-}
-
-.message.success {
-  background: #d1fae5;
-  color: #065f46;
-  border-left: 3px solid #22c55e;
-}
-
-.message.error {
-  background: #fee2e2;
-  color: #991b1b;
-  border-left: 3px solid #ef4444;
-}
-
-/* Loading */
-.loading {
+/* State Messages */
+.state-loading,
+.state-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 2rem;
-  gap: 1rem;
+  padding: 1.5rem;
+  gap: 0.75rem;
+}
+
+.state-empty {
+  color: #999;
+  font-size: 0.85rem;
 }
 
 .spinner {
-  width: 36px;
-  height: 36px;
-  border: 3px solid #e5e5e5;
-  border-top-color: #3b82f6;
+  width: 32px;
+  height: 32px;
+  border: 2px solid #e5e5e5;
+  border-top-color: #0066cc;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -590,33 +560,90 @@ watch(() => props.isVisible, (newVal) => {
   to { transform: rotate(360deg); }
 }
 
-.empty-state {
-  text-align: center;
-  padding: 2rem;
+/* Form */
+.config-form {
+  width: 100%;
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-weight: 500;
+  color: #1a1a1a;
+  font-size: 0.8rem;
+}
+
+.form-group input[type="text"],
+.form-group select {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #e5e5e5;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  transition: all 0.15s;
+  box-sizing: border-box;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #0066cc;
+  box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.1);
+}
+
+.hint {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 0.7rem;
   color: #999;
-  font-size: 0.9375rem;
+}
+
+/* Alerts */
+.alert {
+  padding: 0.75rem;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+  font-size: 0.8rem;
+  border-left: 3px solid;
+}
+
+.alert-success {
+  background: #d1fae5;
+  color: #065f46;
+  border-left-color: #10b981;
+}
+
+.alert-error {
+  background: #fee2e2;
+  color: #991b1b;
+  border-left-color: #ef4444;
 }
 
 /* Step Actions */
 .step-actions {
   display: flex;
   justify-content: space-between;
-  gap: 1rem;
-  margin-top: 1.5rem;
-  padding-top: 1.25rem;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
   border-top: 1px solid #e5e5e5;
 }
 
 .btn-secondary,
-.btn-submit,
-.btn-restore {
-  padding: 0.625rem 1.5rem;
+.btn-primary,
+.btn-submit {
+  padding: 0.5rem 1rem;
   border: none;
-  border-radius: 6px;
+  border-radius: 4px;
   cursor: pointer;
   font-weight: 500;
-  font-size: 0.9375rem;
-  transition: all 0.2s;
+  font-size: 0.8rem;
+  transition: all 0.15s;
+  min-width: fit-content;
 }
 
 .btn-secondary {
@@ -626,14 +653,88 @@ watch(() => props.isVisible, (newVal) => {
 }
 
 .btn-secondary:hover:not(:disabled) {
+  background: #efefef;
+  border-color: #ccc;
+}
+
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: #f5f5f5;
+  color: #1a1a1a;
+  border: 1px solid #e5e5e5;
+  flex: 1;
+}
+
+.btn-primary:hover:not(:disabled) {
   background: #e5e5e5;
+  border-color: #ccc;
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .btn-submit {
-  background: #1a1a1a;
- 
+  background: #0066cc;
+  color: white;
+  flex: 1;
 }
+
 .btn-submit:hover:not(:disabled) {
-  background: #333333;
+  background: #0052a3;
+}
+
+.btn-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Transitions */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .modal-content {
+    max-height: 85vh;
+  }
+
+  .modal-header {
+    padding: 0.875rem 1rem;
+  }
+
+  .modal-header h2 {
+    font-size: 0.95rem;
+  }
+
+  .restore-view {
+    padding: 1rem;
+  }
+
+  .step-indicator {
+    margin-bottom: 1.5rem;
+  }
+
+  .step-number {
+    width: 28px;
+    height: 28px;
+    font-size: 0.75rem;
+  }
+
+  .step-label {
+    font-size: 0.65rem;
+  }
 }
 </style>

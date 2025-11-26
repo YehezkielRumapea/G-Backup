@@ -16,9 +16,9 @@ type ScheduledJob struct {
 	DestinationPath string `gorm:"size:255;not null"`
 
 	// Script Kustom (Arsitektur "Script Runner")
-	PreScript  string `gorm:"column:pre_script;type:text"`
-	PostScript string `gorm:"column:post_script;type:text"`
-
+	PreScript    string `gorm:"column:pre_script;type:text"`
+	PostScript   string `gorm:"column:post_script;type:text"`
+	MaxRetention int    `gorm:"default:10"`
 	// Penjadwalan dan Status
 	ScheduleCron string     `gorm:"size:50;nullable"` // Boleh NULL
 	Priority     int        `gorm:"default:5"`

@@ -136,9 +136,9 @@ func (h *JobHandler) UpdateJob(c echo.Context) error {
 	}
 	id := uint(id64)
 
-	// 2. ✅ Bind request body dengan proper types
+	// 2. ✅ Bind request body dengan proper types (POINTERS)
 	var req struct {
-		JobName         *string `json:"job_name"` // pointer = optional
+		JobName         *string `json:"job_name"`
 		OperationMode   *string `json:"operation_mode"`
 		RcloneMode      *string `json:"rclone_mode"`
 		SourcePath      *string `json:"source_path"`
@@ -147,6 +147,10 @@ func (h *JobHandler) UpdateJob(c echo.Context) error {
 		ScheduleCron    *string `json:"schedule_cron"`
 		PreScript       *string `json:"pre_script"`
 		PostScript      *string `json:"post_script"`
+
+		// 🔥 WAJIB DITAMBAHKAN AGAR BISA DI-UPDATE:
+		MaxRetention *int  `json:"max_retention"`
+		IsActive     *bool `json:"is_active"`
 	}
 
 	if err := c.Bind(&req); err != nil {
@@ -155,12 +159,12 @@ func (h *JobHandler) UpdateJob(c echo.Context) error {
 		})
 	}
 
-	// 3. ✅ Build updated job (hanya field yang dikirim)
+	// 3. ✅ Build updated job
 	updated := &models.ScheduledJob{
 		ID: id,
 	}
 
-	// ✅ Set field hanya jika provided
+	// ✅ Set field hanya jika provided (tidak nil)
 	if req.JobName != nil {
 		updated.JobName = *req.JobName
 	}
@@ -187,6 +191,10 @@ func (h *JobHandler) UpdateJob(c echo.Context) error {
 	}
 	if req.PostScript != nil {
 		updated.PostScript = *req.PostScript
+	}
+
+	if req.MaxRetention != nil {
+		updated.MaxRetention = *req.MaxRetention
 	}
 
 	// 4. Panggil service
