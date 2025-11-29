@@ -8,21 +8,25 @@
         </div>  
 
         <form @submit.prevent="handleBackupSubmit" class="config-form">
-          <p class="form-description">Buat template Job baru (Manual atau Terjadwal).</p>
 
-          <!-- Job Name -->
           <div class="form-group">
             <label for="backup-jobName">Job Name *</label>
             <input type="text" id="backup-jobName" v-model="backupForm.job_name" required placeholder="e.g., Daily Database Backup" />
           </div>
 
-          <!-- Source Path -->
           <div class="form-group">
             <label for="backup-source">Source Path (Lokal) *</label>
             <input type="text" id="backup-source" v-model="backupForm.source_path" required placeholder="/tmp/backup_file.zip" />
           </div>
 
-          <!-- Remote Name (Dropdown List) -->
+          <div class="form-group">
+            <label for="backup-mode">Backup Mode *</label>
+            <select id="backup-mode" v-model="backupForm.rclone_mode" required>
+              <option value="copy">Copy</option>
+              <option value="sync">Sync</option>
+            </select>
+          </div>
+
           <div class="form-group">
             <label for="backup-remote">Drive Name *</label>
             <select id="backup-remote" v-model="backupForm.remote_name" required>
@@ -31,35 +35,35 @@
                 {{ remote.name }}
               </option>
             </select>
-            <small class="hint">Nama remote yang sudah dikonfigurasi di rclone</small>
           </div>
 
-          <!-- Destination Path -->
           <div class="form-group">
             <label for="backup-dest">Destination Path (Cloud) *</label>
             <input type="text" id="backup-dest" v-model="backupForm.destination_path" required placeholder="/backups/database/" />
           </div>
 
-          <div class="form-group">
-            <label for="edit-retention">Max Retention (Round Robin Cleanup)</label>
+          <div class="form-group" :class="{ 'disabled-group': backupForm.rclone_mode === 'sync' }">
+            <label for="create-retention">Max Retention</label>
             <div class="input-with-hint">
               <input 
                 type="number" 
-                id="edit-retention" 
+                id="create-retention" 
                 v-model.number="backupForm.max_retention" 
                 min="1" 
                 max="100"
                 class="form-input"
                 placeholder="10"
+                :disabled="backupForm.rclone_mode === 'sync'"
               />
             </div>
-            <small class="hint">
-              Jumlah file backup terakhir yang disimpan. File yang lebih tua dari jumlah ini akan dihapus otomatis untuk menghemat storage.
+            <small class="hint" v-if="backupForm.rclone_mode === 'copy'">
               <br><strong>Default: 10</strong>
+            </small>
+            <small class="hint warning" v-else>
+              Fitur ini dinonaktifkan pada mode Sync.
             </small>
           </div>
 
-          <!-- Schedule Section -->
           <div class="schedule-section">
             <div class="section-header">
               <h3>Schedule Configuration</h3>
@@ -69,7 +73,6 @@
               </label>
             </div>
 
-            <!-- Schedule Options -->
             <transition name="slide-fade">
               <div v-if="isScheduled" class="schedule-options">
                 <div class="schedule-type-selector">
@@ -80,7 +83,6 @@
                   </button>
                 </div>
 
-                <!-- Hourly -->
                 <div v-if="scheduleType === 'hourly'" class="schedule-config">
                   <label>Every</label>
                   <div class="input-group">
@@ -89,7 +91,6 @@
                   </div>
                 </div>
 
-                <!-- Daily -->
                 <div v-if="scheduleType === 'daily'" class="schedule-config">
                   <label>Every day at</label>
                   <div class="input-group">
@@ -97,7 +98,6 @@
                   </div>
                 </div>
 
-                <!-- Weekly -->
                 <div v-if="scheduleType === 'weekly'" class="schedule-config">
                   <label>Every</label>
                   <div class="weekdays-selector">
@@ -112,7 +112,6 @@
                   </div>
                 </div>
 
-                <!-- Monthly -->
                 <div v-if="scheduleType === 'monthly'" class="schedule-config">
                   <label>On day</label>
                   <div class="input-group">
@@ -125,14 +124,12 @@
                   </div>
                 </div>
 
-                <!-- Custom -->
                 <div v-if="scheduleType === 'custom'" class="schedule-config">
                   <label>Custom Cron Expression</label>
                   <input type="text" v-model="scheduleConfig.customCron" placeholder="*/5 * * * *" class="cron-input" />
                   <small class="hint">Format: minute hour day month weekday <a href="https://crontab.guru" target="_blank">Need help?</a></small>
                 </div>
 
-                <!-- Cron Preview -->
                 <div class="cron-preview">
                   <span class="preview-label">Cron Expression:</span>
                   <code class="preview-code">{{ generatedCron || '-' }}</code>
@@ -142,7 +139,6 @@
             </transition>
           </div>
 
-          <!-- Pre-Script -->
           <div class="form-group">
             <label for="backup-pre">Pre-Script (Executed BEFORE Rclone)</label>
             <textarea id="backup-pre" v-model="backupForm.pre_script" rows="3" placeholder="#!/bin/bash
@@ -151,7 +147,6 @@ mysqldump -u user -p password database > /tmp/backup.sql
 gzip /tmp/backup.sql"></textarea>
           </div>
 
-          <!-- Post-Script -->
           <div class="form-group">
             <label for="backup-post">Post-Script (Executed AFTER successful upload)</label>
             <textarea id="backup-post" v-model="backupForm.post_script" rows="3" placeholder="#!/bin/bash
@@ -159,7 +154,6 @@ gzip /tmp/backup.sql"></textarea>
 rm /tmp/backup.sql.gz"></textarea>
           </div>
 
-          <!-- Buttons -->
           <div class="form-actions">
             <button type="button" @click="resetForm" class="btn-secondary">Reset</button>
             <button type="submit" :disabled="isLoading" class="btn-submit">
@@ -169,7 +163,6 @@ rm /tmp/backup.sql.gz"></textarea>
           </div>
         </form>
 
-        <!-- Messages -->
         <transition name="fade">
           <div v-if="message" class="message success">{{ message }}</div>
         </transition>
@@ -215,7 +208,7 @@ const weekdays = [
 
 const backupForm = ref({
   job_name: '',
-  rclone_mode: 'COPY',
+  rclone_mode: 'copy', // Default Copy
   source_path: '',
   remote_name: '',
   destination_path: '',
@@ -225,14 +218,20 @@ const backupForm = ref({
   max_retention: 10
 })
 
+// Watcher untuk Mode Sync
+// Jika mode berubah ke 'sync', kita set retention ke 0 atau nilai dummy karena tidak dipakai
+watch(() => backupForm.value.rclone_mode, (newMode) => {
+    if (newMode === 'sync') {
+        // Optional: Reset retention atau biarkan saja disabled
+        // backupForm.value.max_retention = 0; 
+    }
+});
+
 const remoteList = ref([])
 
-// Fetch remote list from endpoint
 async function fetchRemoteList() {
   try {
     const res = await driveService.listRemotes()
-    // jika API mengembalikan { remotes: [...] }, pakai res.remotes
-    // jika langsung array, pakai res
     remoteList.value = Array.isArray(res) ? res : res.remotes || []
   } catch (err) {
     console.error('Failed to fetch remotes:', err)
@@ -240,7 +239,6 @@ async function fetchRemoteList() {
 }
 
 onMounted(() => fetchRemoteList())
-
 
 const generatedCron = computed(() => {
   if (!isScheduled.value) return ''
@@ -268,21 +266,51 @@ const cronDescription = computed(() => {
   }
 })
 
-watch(generatedCron, (newCron)=> backupForm.value.schedule_cron = newCron)
+watch(generatedCron, (newCron) => {
+  if (isScheduled.value) {
+    backupForm.value.schedule_cron = newCron
+  }
+})
 
-function handleScheduleToggle(){ if(!isScheduled.value) backupForm.value.schedule_cron='' }
+function handleScheduleToggle() {
+  if (!isScheduled.value) {
+    backupForm.value.schedule_cron = ''
+  } else {
+    backupForm.value.schedule_cron = generatedCron.value
+  }
+}
+
 function selectScheduleType(type){ scheduleType.value=type }
 function toggleWeekday(day){ const idx=scheduleConfig.value.weekdays.indexOf(day); if(idx>-1) scheduleConfig.value.weekdays.splice(idx,1); else scheduleConfig.value.weekdays.push(day) }
+
 function resetForm(){
-  backupForm.value={ job_name:'', rclone_mode:'COPY', source_path:'', remote_name:'', destination_path:'', schedule_cron:'', pre_script:'', post_script:'' }
+  backupForm.value={ 
+      job_name:'', 
+      rclone_mode:'copy', // Reset ke copy
+      source_path:'', 
+      remote_name:'', 
+      destination_path:'', 
+      schedule_cron:'', 
+      pre_script:'', 
+      post_script:'', 
+      max_retention: 10 
+  }
   isScheduled.value=false
   scheduleConfig.value={ hours:1,time:'00:00',weekdays:[],dayOfMonth:1,customCron:'' }
 }
+
 async function handleBackupSubmit(){
   isLoading.value=true
   message.value=null
   errorMessage.value=null
+  
   try{
+    if (!isScheduled.value) {
+        backupForm.value.schedule_cron = '';
+    } else {
+        backupForm.value.schedule_cron = generatedCron.value;
+    }
+
     const res=await jobService.createBackupJob(backupForm.value)
     message.value=res.message||'Job created successfully!'
     emit('success')
@@ -291,506 +319,87 @@ async function handleBackupSubmit(){
     errorMessage.value=err.response?.data?.error||'Failed to create backup job.'
   }finally{ isLoading.value=false }
 }
+
 function close(){ emit('close') }
+
+watch(() => props.isVisible, (newVal) => {
+  if (newVal) {
+    resetForm()
+    fetchRemoteList()
+  }
+})
 </script>
 
 <style scoped>
-.config-view {
-  max-width: 900px;
-  margin: 0 auto;
-}
+/* ... CSS SEBELUMNYA TETAP ADA ... */
+.config-view { max-width: 900px; margin: 0 auto; }
+.modal-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+.modal-content { background: #fff; border-radius: 8px; border: 1px solid #e5e5e5; width: 90%; max-width: 800px; max-height: 90vh; overflow-y: auto; position: relative; }
+.modal-header { display: flex; justify-content: space-between; align-items: center; padding: 1.25rem 1.5rem; background: #fafafa; border-bottom: 1px solid #e5e5e5; }
+.modal-header h2 { margin: 0; font-size: 1.125rem; font-weight: 600; color: #1a1a1a; }
+.close-btn { background: transparent; border: 1px solid #e5e5e5; color: #666; width: 32px; height: 32px; border-radius: 4px; cursor: pointer; font-size: 1.5rem; line-height: 1; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+.close-btn:hover { background: #f5f5f5; border-color: #1a1a1a; color: #1a1a1a; }
 
-/* Modal */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 20px;
-}
+/* Form Styles */
+.config-form { padding: 1.5rem; }
+.form-description { color: #666; margin: 0 0 1.5rem 0; font-size: 0.9375rem; }
+.form-group { margin-bottom: 1.25rem; }
+.form-group label { display: block; margin-bottom: 0.5rem; font-weight: 500; color: #1a1a1a; font-size: 0.875rem; }
+.form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.625rem 0.875rem; border: 1px solid #e5e5e5; border-radius: 6px; font-size: 0.9375rem; transition: all 0.2s; box-sizing: border-box; }
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: #1a1a1a; }
 
-.modal-content {
-  background: #fff;
-  border-radius: 8px;
-  border: 1px solid #e5e5e5;
-  width: 90%;
-  max-width: 800px;
-  max-height: 90vh;
-  overflow-y: auto;
-  position: relative;
+/* ✅ NEW: Backup Mode Selector CSS */
+/* Container: Gunakan Flex agar item berjejer ke samping sesuai ukuran konten */
+/* Container: Posisikan tombol di tengah-tengah form */
+/* ✅ Disabled Group Style */
+.disabled-group {
+  opacity: 0.6;
+  pointer-events: none;
 }
-
-.modal-content::-webkit-scrollbar {
-  width: 8px;
-}
-
-.modal-content::-webkit-scrollbar-track {
-  background: #f0f0f0;
-}
-
-.modal-content::-webkit-scrollbar-thumb {
-  background: #d4d4d4;
-  border-radius: 4px;
-}
-
-/* Header */
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1.25rem 1.5rem;
-  background: #fafafa;
-  border-bottom: 1px solid #e5e5e5;
-}
-
-.modal-header h2 {
-  margin: 0;
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: #1a1a1a;
-}
-
-.close-btn {
-  background: transparent;
-  border: 1px solid #e5e5e5;
-  color: #666;
-  width: 32px;
-  height: 32px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1.5rem;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-}
-
-.close-btn:hover {
-  background: #f5f5f5;
-  border-color: #1a1a1a;
-  color: #1a1a1a;
-}
-
-/* Form */
-.config-form {
-  padding: 1.5rem;
-}
-
-.form-description {
-  color: #666;
-  margin: 0 0 1.5rem 0;
-  font-size: 0.9375rem;
-}
-
-/* Form Group */
-.form-group {
-  margin-bottom: 1.25rem;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
-  color: #1a1a1a;
-  font-size: 0.875rem;
-}
-
-.form-group input[type="text"],
-.form-group input[type="number"],
-.form-group input[type="time"],
-.form-group select,
-.form-group textarea {
-  width: 100%;
-  padding: 0.625rem 0.875rem;
-  border: 1px solid #e5e5e5;
-  border-radius: 6px;
-  font-size: 0.9375rem;
-  transition: all 0.2s;
-  box-sizing: border-box;
-}
-
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
-  outline: none;
-  border-color: #1a1a1a;
-}
-
-.form-group textarea {
-  font-family: 'Consolas', 'Monaco', monospace;
-  font-size: 0.875rem;
-  line-height: 1.6;
-}
-
-.hint {
-  display: block;
-  margin-top: 0.375rem;
-  font-size: 0.8125rem;
-  color: #666;
-}
-
-.hint a {
-  color: #1a1a1a;
-  text-decoration: underline;
-}
-
-/* Schedule Section */
-.schedule-section {
-  background: #fafafa;
-  padding: 1rem;
-  border-radius: 1px;
-  margin-bottom: 1rem;
-  border: 1px solid #000000;
-}
-
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.25rem;
-}
-
-.section-header h3 {
-  margin: 0;
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: #1a1a1a;
-}
-
-/* Toggle Switch */
-.toggle-switch {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  cursor: pointer;
-  user-select: none;
-}
-
-.toggle-switch input[type="checkbox"] {
-  position: relative;
-  width: 44px;
-  height: 24px;
-  appearance: none;
-  background: #d4d4d4;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.toggle-switch input[type="checkbox"]:checked {
-  background: #1a1a1a;
-}
-
-.toggle-switch input[type="checkbox"]::before {
-  content: '';
-  position: absolute;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: white;
-  top: 2px;
-  left: 2px;
-  transition: all 0.2s;
-}
-
-.toggle-switch input[type="checkbox"]:checked::before {
-  left: 22px;
-}
-
-.toggle-label {
-  font-weight: 500;
-  color: #1a1a1a;
-  font-size: 0.875rem;
-}
-
-/* Schedule Options */
-.schedule-options {
-  margin-top: 1.25rem;
-}
-
-.schedule-type-selector {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
-  gap: 0.5rem;
-  margin-bottom: 1.25rem;
-}
-
-.type-btn {
-  padding: 0.625rem;
-  background: white;
-  border: 1px solid #e5e5e5;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-weight: 500;
-  font-size: 0.875rem;
-  color: #666;
-}
-
-.type-btn:hover {
-  border-color: #1a1a1a;
-  color: #1a1a1a;
-}
-
-.type-btn.active {
-  background: #1a1a1a;
-  border-color: #1a1a1a;
-  color: white;
-}
-
-/* Schedule Config */
-.schedule-config {
-  background: white;
-  padding: 1.25rem;
-  border-radius: 6px;
-  margin-bottom: 1rem;
-  border: 1px solid #e5e5e5;
-}
-
-.schedule-config label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
-  color: #1a1a1a;
-  font-size: 0.875rem;
-}
-
-.input-group {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.time-input {
-  flex: 0 0 auto;
-  padding: 0.625rem 0.875rem;
-  border: 1px solid #e5e5e5;
-  border-radius: 6px;
-  font-size: 0.9375rem;
-  font-weight: 500;
-  min-width: 100px;
-}
-
-.time-input:focus {
-  outline: none;
-  border-color: #1a1a1a;
-}
-
-.input-suffix {
-  color: #666;
-  font-weight: 500;
-  font-size: 0.875rem;
-}
-
-/* Weekdays Selector */
-.weekdays-selector {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-}
-
-.weekday-btn {
-  padding: 0.625rem 0.375rem;
-  background: white;
-  border: 1px solid #e5e5e5;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
-  font-size: 0.875rem;
-  color: #666;
-  transition: all 0.2s;
-}
-
-.weekday-btn:hover {
-  border-color: #1a1a1a;
-  color: #1a1a1a;
-}
-
-.weekday-btn.active {
-  background: #1a1a1a;
-  border-color: #1a1a1a;
-  color: white;
-}
-
-/* Cron Input */
-.cron-input {
-  width: 100%;
-  padding: 0.625rem 0.875rem;
-  border: 1px solid #e5e5e5;
-  border-radius: 6px;
-  font-family: 'Consolas', monospace;
-  font-size: 0.875rem;
-}
-
-.cron-input:focus {
-  outline: none;
-  border-color: #1a1a1a;
-}
-
-/* Cron Preview */
-.cron-preview {
-  background: #1a1a1a;
-  padding: 1rem;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.preview-label {
+.disabled-group input {
+  background-color: #f5f5f5;
   color: #999;
-  font-weight: 500;
-  font-size: 0.8125rem;
 }
-
-.preview-code {
-  background: #2a2a2a;
-  color: #22c55e;
-  padding: 0.375rem 0.75rem;
-  border-radius: 4px;
-  font-family: 'Consolas', monospace;
-  font-size: 0.875rem;
+.hint.warning {
+  color: #d97706; /* Orange warning */
   font-weight: 500;
 }
 
-.preview-description {
-  color: #d4d4d4;
-  font-size: 0.875rem;
-}
-
-/* Form Actions */
-.form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  margin-top: 1.5rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid #e5e5e5;
-}
-
-.btn-secondary {
-  background: white;
-  color: #666;
-  border: 1px solid #e5e5e5;
-  padding: 0.625rem 1.125rem;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
-  font-size: 0.9375rem;
-  transition: all 0.2s;
-}
-
-.btn-secondary:hover {
-  border-color: #1a1a1a;
-  color: #1a1a1a;
-  background: #f5f5f5;
-}
-
-.btn-submit {
-  background: #1a1a1a;
-  color: white;
-  padding: 0.625rem 1.5rem;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
-  font-size: 0.9375rem;
-  transition: all 0.2s;
-}
-
-.btn-submit:hover:not(:disabled) {
-  background: #333;
-}
-
-.btn-submit:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* Messages */
-.message {
-  padding: 0.875rem 1rem;
-  border-radius: 6px;
-  margin-top: 1rem;
-  font-weight: 500;
-  font-size: 0.9375rem;
-}
-
-.message.success {
-  background: #d1fae5;
-  color: #065f46;
-  border-left: 3px solid #22c55e;
-}
-
-.message.error {
-  background: #fee2e2;
-  color: #991b1b;
-  border-left: 3px solid #ef4444;
-}
-
-/* Transitions */
-.slide-fade-enter-active {
-  transition: all 0.3s ease-out;
-}
-
-.slide-fade-leave-active {
-  transition: all 0.2s cubic-bezier(1, 0.5, 0.8, 1);
-}
-
-.slide-fade-enter-from,
-.slide-fade-leave-to {
-  transform: translateY(-10px);
-  opacity: 0;
-}
-
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.2s;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-
+/* ... Sisa CSS Schedule & Responsive tetap sama ... */
+.hint { display: block; margin-top: 0.375rem; font-size: 0.8125rem; color: #666; }
+.schedule-section { background: #fafafa; padding: 1rem; border-radius: 1px; margin-bottom: 1rem; border: 1px solid #000000; }
+.section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
+.section-header h3 { margin: 0; font-size: 0.9375rem; font-weight: 600; color: #1a1a1a; }
+.toggle-switch { display: flex; align-items: center; gap: 0.75rem; cursor: pointer; user-select: none; }
+.toggle-switch input[type="checkbox"] { position: relative; width: 44px; height: 24px; appearance: none; background: #d4d4d4; border-radius: 12px; cursor: pointer; transition: all 0.2s; }
+.toggle-switch input[type="checkbox"]:checked { background: #1a1a1a; }
+.toggle-switch input[type="checkbox"]::before { content: ''; position: absolute; width: 20px; height: 20px; border-radius: 50%; background: white; top: 2px; left: 2px; transition: all 0.2s; }
+.toggle-switch input[type="checkbox"]:checked::before { left: 22px; }
+.toggle-label { font-weight: 500; color: #1a1a1a; font-size: 0.875rem; }
+.schedule-options { margin-top: 1.25rem; }
+.schedule-type-selector { display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); gap: 0.5rem; margin-bottom: 1.25rem; }
+.type-btn { padding: 0.625rem; background: white; border: 1px solid #e5e5e5; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-weight: 500; font-size: 0.875rem; color: #666; }
+.type-btn:hover { border-color: #1a1a1a; color: #1a1a1a; }
+.type-btn.active { background: #1a1a1a; border-color: #1a1a1a; color: white; }
+.schedule-config { background: white; padding: 1.25rem; border-radius: 6px; margin-bottom: 1rem; border: 1px solid #e5e5e5; }
+.schedule-config label { display: block; margin-bottom: 0.5rem; font-weight: 500; color: #1a1a1a; font-size: 0.875rem; }
+.input-group { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
+.time-input { flex: 0 0 auto; padding: 0.625rem 0.875rem; border: 1px solid #e5e5e5; border-radius: 6px; font-size: 0.9375rem; font-weight: 500; min-width: 100px; }
+.input-suffix { color: #666; font-weight: 500; font-size: 0.875rem; }
+.weekdays-selector { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.5rem; margin-bottom: 1rem; }
+.weekday-btn { padding: 0.625rem 0.375rem; background: white; border: 1px solid #e5e5e5; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 0.875rem; color: #666; transition: all 0.2s; }
+.weekday-btn:hover { border-color: #1a1a1a; color: #1a1a1a; }
+.weekday-btn.active { background: #1a1a1a; border-color: #1a1a1a; color: white; }
+.cron-input { width: 100%; padding: 0.625rem 0.875rem; border: 1px solid #e5e5e5; border-radius: 6px; font-family: 'Consolas', monospace; font-size: 0.875rem; }
+.cron-preview { background: #1a1a1a; padding: 1rem; border-radius: 6px; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.preview-label { color: #999; font-weight: 500; font-size: 0.8125rem; }
+.preview-code { background: #2a2a2a; color: #22c55e; padding: 0.375rem 0.75rem; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 0.875rem; font-weight: 500; }
+.preview-description { color: #d4d4d4; font-size: 0.875rem; }
+.form-actions { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid #e5e5e5; }
+.btn-submit { background: #1a1a1a; color: white; padding: 0.625rem 1.5rem; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 0.9375rem; transition: all 0.2s; }
+.btn-secondary { background: white; color: #666; border: 1px solid #e5e5e5; padding: 0.625rem 1.125rem; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 0.9375rem; }
+.message.success { background: #d1fae5; color: #065f46; border-left: 3px solid #22c55e; padding: 0.875rem 1rem; border-radius: 6px; margin-top: 1rem; }
+.message.error { background: #fee2e2; color: #991b1b; border-left: 3px solid #ef4444; padding: 0.875rem 1rem; border-radius: 6px; margin-top: 1rem; }
 /* Responsive */
-@media (max-width: 768px) {
-  .modal-content {
-    width: 95%;
-  }
-  
-  .config-form {
-    padding: 1rem;
-  }
-  
-  .schedule-type-selector {
-    grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
-  }
-  
-  .weekdays-selector {
-    gap: 0.375rem;
-  }
-  
-  .weekday-btn {
-    padding: 0.5rem 0.25rem;
-    font-size: 0.8125rem;
-  }
-  
-  .form-actions {
-    flex-direction: column;
-  }
-  
-  .btn-submit,
-  .btn-secondary {
-    width: 100%;
-  }
-}
+@media (max-width: 768px) { .modal-content { width: 95%; } .config-form { padding: 1rem; } .schedule-type-selector { grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); } .form-actions { flex-direction: column; } .btn-submit, .btn-secondary { width: 100%; } }
 </style>

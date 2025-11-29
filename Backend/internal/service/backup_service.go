@@ -107,8 +107,9 @@ func (s *backupServiceImpl) TriggerManualJob(jobID uint) error {
 
 // executeJobLifecycle: Menjalankan Pre-Script, Rclone, dan Post-Script
 func (s *backupServiceImpl) executeJobLifecycle(job models.ScheduledJob) {
-	fmt.Printf("[WORKER %d] Job %s: Memulai Eksekusi 3 Fase...\n", job.ID, job.JobName)
-
+	fmt.Printf("[WORKER %d] Job %s: Memulai Eksekusi 3 Fase... RcloneMode: %s\n", job.ID, job.JobName, job.RcloneMode)
+	// ⭐ HIGHLIGHT: Menampilkan mode di log
+	fmt.Printf("[WORKER %d] Menjalankan Rclone (Mode: %s)...\n", job.ID, job.RcloneMode)
 	// Set Status RUNNING (Locking)
 	s.JobRepo.UpdateLastRunStatus(job.ID, time.Now(), "RUNNING")
 
@@ -169,45 +170,54 @@ func (s *backupServiceImpl) executeJobLifecycle(job models.ScheduledJob) {
 	var runtimeDestPath string
 
 	if job.OperationMode == "BACKUP" {
-		timestamp := time.Now().Format("20060102_150405")
 
-		sourceInfo, err := os.Stat(job.SourcePath)
-		if err != nil {
-			errorMsg := fmt.Sprintf("Failed to stat source path: %v", err)
-			s.handleJobCompletion(job, RcloneResult{Success: false, ErrorMsg: errorMsg}, "FAIL_SOURCE_CHECK")
-			return
-		}
+		if job.RcloneMode == "copy" {
+			fmt.Printf("⚠️ [WORKER %d] Skipping timestamping for non-backup job.\n", job.ID)
+			timestamp := time.Now().Format("20060102_150405")
 
-		var newDestinationName string
+			sourceInfo, err := os.Stat(job.SourcePath)
+			if err != nil {
+				errorMsg := fmt.Sprintf("Failed to stat source path: %v", err)
+				s.handleJobCompletion(job, RcloneResult{Success: false, ErrorMsg: errorMsg}, "FAIL_SOURCE_CHECK")
+				return
+			}
 
-		var isSourceDir = sourceInfo.IsDir()
+			var newDestinationName string
 
-		if isSourceDir {
-			// Folder → hasil tetap folder
-			folderName := filepath.Base(job.SourcePath)
-			newDestinationName = fmt.Sprintf("%s_%s", folderName, timestamp)
+			var isSourceDir = sourceInfo.IsDir()
+
+			if isSourceDir {
+				// Folder → hasil tetap folder
+				folderName := filepath.Base(job.SourcePath)
+				newDestinationName = fmt.Sprintf("%s_%s", folderName, timestamp)
+			} else {
+				// FILE → hasil tetap file
+				fileName := filepath.Base(job.SourcePath)
+				ext := filepath.Ext(fileName)
+				nameWithoutExt := strings.TrimSuffix(fileName, ext)
+				newDestinationName = fmt.Sprintf("%s_%s%s", nameWithoutExt, timestamp, ext)
+			}
+
+			originalDestPath := job.DestinationPath
+			runtimeDestPath = filepath.Join(originalDestPath, newDestinationName)
+
+			fmt.Printf("[WORKER %d] 🎯 Runtime destination: %s:%s\n", job.ID, job.RemoteName, runtimeDestPath)
+			fmt.Printf("[WORKER %d] 💾 DB destination (unchanged): %s\n", job.ID, job.DestinationPath)
+
+			// Round Robin Cleanup
+			fmt.Printf("[WORKER %d] 🔄 Checking for old backups...\n", job.ID)
+			if err := s.CleanupOldBackups(job.RemoteName, originalDestPath, job.MaxRetention); err != nil {
+				fmt.Printf("⚠️ [WORKER %d] Cleanup warning: %v\n", job.ID, err)
+			}
+		} else if job.RcloneMode == "sync" {
+			runtimeDestPath = job.DestinationPath
 		} else {
-			// FILE → hasil tetap file
-			fileName := filepath.Base(job.SourcePath)
-			ext := filepath.Ext(fileName)
-			nameWithoutExt := strings.TrimSuffix(fileName, ext)
-			newDestinationName = fmt.Sprintf("%s_%s%s", nameWithoutExt, timestamp, ext)
-		}
-
-		originalDestPath := job.DestinationPath
-		runtimeDestPath = filepath.Join(originalDestPath, newDestinationName)
-
-		fmt.Printf("[WORKER %d] 🎯 Runtime destination: %s:%s\n", job.ID, job.RemoteName, runtimeDestPath)
-		fmt.Printf("[WORKER %d] 💾 DB destination (unchanged): %s\n", job.ID, job.DestinationPath)
-
-		// Round Robin Cleanup
-		fmt.Printf("[WORKER %d] 🔄 Checking for old backups...\n", job.ID)
-		if err := s.CleanupOldBackups(job.RemoteName, originalDestPath, job.MaxRetention); err != nil {
-			fmt.Printf("⚠️ [WORKER %d] Cleanup warning: %v\n", job.ID, err)
+			runtimeDestPath = job.DestinationPath
 		}
 	} else {
 		runtimeDestPath = job.DestinationPath
 	}
+
 	// ============================================================
 
 	// --- FASE 2: RCLONE EXECUTION ---
@@ -286,9 +296,16 @@ func (s *backupServiceImpl) buildRcloneArgs(job models.ScheduledJob, runtimeDest
 		SourcePath = job.SourcePath
 		Destination = fmt.Sprintf("%s:%s", job.RemoteName, runtimeDestPath)
 
-		if !isSourceDir {
-			command = "copyto"
-		} else {
+		switch command {
+		case "sync":
+			command = "sync"
+		case "copy", "":
+			if !isSourceDir {
+				command = "copyto"
+			} else {
+				command = "copy"
+			}
+		default:
 			command = "copy"
 		}
 	}
@@ -306,6 +323,11 @@ func (s *backupServiceImpl) buildRcloneArgs(job models.ScheduledJob, runtimeDest
 		"--human-readable",
 	}
 
+	if command == "sync" {
+		args = append(args, "--delete-during")
+		fmt.Printf("[buildRcloneArgs] SYNC mode detected: adding --delete-during flag\n")
+	}
+
 	return args
 }
 
@@ -319,7 +341,9 @@ func (s *backupServiceImpl) handleJobCompletion(job models.ScheduledJob, result 
 	// Jika Gagal: Ambil output + Error message
 	logMessage := result.Output
 	if status != "SUCCESS" {
-		logMessage = fmt.Sprintf("%s\nError Details: %s", result.Output, result.ErrorMsg)
+		logMessage = ""
+	} else {
+		logMessage = result.ErrorMsg
 	}
 
 	// --- 2. SIMPAN KE TABEL LOGS (Detail Status) ---
@@ -360,6 +384,7 @@ func (s *backupServiceImpl) handleJobCompletion(job models.ScheduledJob, result 
 		stats := parseRcloneStats(result.Output)
 		fmt.Printf("✅ [COMPLETE] Job %d: Transferred %.2f GB in %d seconds (Speed: %s)\n",
 			job.ID,
+			job.RcloneMode,
 			float64(result.TransferredBytes)/1073741824.0,
 			int(result.Duration.Seconds()),
 			stats.Speed,
