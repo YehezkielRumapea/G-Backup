@@ -22,6 +22,7 @@ Manage and monitor your Gdrive status</p>
     <thead>
      <tr>
       <th>Gdrive</th>
+      <th>Email</th>
       <th>Status</th>
       <th>Storage</th>
       <th>Job Runs</th>

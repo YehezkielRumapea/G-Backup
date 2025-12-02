@@ -1,23 +1,34 @@
 <template>
     <tr>
+        <!-- ✅ UNCHANGED: Remote Name Column -->
         <td>
             <div class="remote-name-wrapper">
                 <div class="remote-icon"><strong>{{ remote.remote_name }}</strong></div>
-                <div v-if="remote.email" class="email-tooltip">
-                    📧 {{ remote.email }}
-                </div>
             </div>
             <div v-if="remote.system_message" class="warning">
                 {{ remote.system_message }}
             </div>
         </td>
         
+        <!-- ✅ NEW: Email Column with Truncation and Tooltip -->
         <td>
-            <span class="status" :class="remote.status_connect.toLowerCase()">
+            <div v-if="remote.email" class="email-cell" :title="remote.email">
+                <span class="email-icon"></span>
+                <span class="email-text">{{ truncatedEmail }}</span>
+            </div>
+            <div v-else class="email-cell">
+                <span class="email-placeholder">No email</span>
+            </div>
+        </td>
+        
+        <!-- ✅ UNCHANGED: Status Column -->
+        <td>
+            <span class="status" :class="getStatusClass(remote.status_connect)">
                 {{ remote.status_connect }}
             </span>
         </td>
 
+        <!-- ✅ UNCHANGED: Storage Column -->
         <td>
             <div class="storage-info">
                 <span>{{ usedFormatted }} / {{ totalFormatted }} GB</span>
@@ -33,8 +44,10 @@
             </div>
         </td>
         
+        <!-- ✅ UNCHANGED: Active Jobs Column -->
         <td class="center">{{ remote.active_job_count }}</td>
         
+        <!-- ✅ UNCHANGED: Last Checked Column -->
         <td class="text-muted">{{ formatLastChecked(remote.last_checked_at) }}</td>
     </tr>
 </template>
@@ -49,6 +62,7 @@ const props = defineProps({
     }
 });
 
+// ✅ UNCHANGED: Existing computed properties
 const used = computed(() => props.remote.used_storage_gb || 0);
 const total = computed(() => props.remote.total_storage_gb || 0);
 
@@ -64,6 +78,40 @@ const usedFormatted = computed(() => {
 
 const totalFormatted = computed(() => total.value.toFixed(2));
 
+// ✅ NEW: Truncate email for display
+const truncatedEmail = computed(() => {
+    const email = props.remote.email || '';
+    const maxLength = 25; // Adjust based on your needs
+    
+    if (email.length <= maxLength) {
+        return email;
+    }
+    
+    // Split email into username and domain
+    const [username, domain] = email.split('@');
+    
+    if (!domain) return email;
+    
+    // If username is too long, truncate it
+    if (username.length > 15) {
+        return `${username.substring(0, 12)}...@${domain}`;
+    }
+    
+    // If domain is too long, show ellipsis
+    if (domain.length > 15) {
+        return `${username}@${domain.substring(0, 12)}...`;
+    }
+    
+    return email;
+});
+
+// ✅ NEW: Helper function for status class
+function getStatusClass(status) {
+    if (!status) return 'pending';
+    return status.toLowerCase();
+}
+
+// ✅ UNCHANGED: Format date function
 function formatLastChecked(isoDate) {
     if (!isoDate) return 'N/A';
     try {
@@ -82,11 +130,11 @@ function formatLastChecked(isoDate) {
 </script>
 
 <style scoped>
-/* 🆕 Remote name wrapper with email tooltip */
+/* ✅ REMOVED: Old tooltip styles (no longer needed) */
+
+/* ✅ CHANGED: Simplified remote name wrapper */
 .remote-name-wrapper {
-    position: relative;
     display: inline-block;
-    cursor: pointer;
 }
 
 .remote-icon {
@@ -107,48 +155,41 @@ function formatLastChecked(isoDate) {
     color: #3498db;
 }
 
-/* 🆕 Email tooltip - hidden by default */
-.email-tooltip {
-    position: absolute;
-    bottom: 100%;
-    left: 0;
-    margin-bottom: 0.5rem;
-    background-color: #2c3e50;
-    color: white;
-    padding: 0.5rem 0.75rem;
-    border-radius: 4px;
-    font-size: 0.8rem;
+/* ✅ NEW: Email cell styles */
+.email-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    max-width: 200px; /* Limit width to prevent table expansion */
+    cursor: help; /* Show help cursor on hover */
+}
+
+.email-icon {
+    font-size: 0.9rem;
+    flex-shrink: 0;
+}
+
+.email-text {
+    color: #2c3e50;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
-    opacity: 0;
-    visibility: hidden;
-    transform: translateY(8px);
-    transition: all 0.2s ease;
-    pointer-events: none;
-    z-index: 100;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    transition: color 0.2s ease;
 }
 
-/* 🆕 Email tooltip arrow/pointer */
-.email-tooltip::after {
-    content: '';
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 0;
-    height: 0;
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    border-top: 5px solid #2c3e50;
+.email-cell:hover .email-text {
+    color: #3498db;
 }
 
-/* 🆕 Show tooltip on hover */
-.remote-name-wrapper:hover .email-tooltip {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
+.email-placeholder {
+    color: #95a5a6;
+    font-style: italic;
+    font-size: 0.8rem;
 }
 
+/* ✅ UNCHANGED: Status styles */
 .status {
     display: inline-block;
     padding: 3px 8px;
@@ -167,12 +208,19 @@ function formatLastChecked(isoDate) {
     background-color: #e74c3c;
 }
 
+/* ✅ NEW: Pending status style */
+.status.pending {
+    background-color: #f39c12;
+}
+
+/* ✅ UNCHANGED: Warning styles */
 .warning {
     font-size: 0.75rem;
     color: #ff0000;
     margin-top: 0.25rem;
 }
 
+/* ✅ UNCHANGED: Storage info styles */
 .storage-info {
     display: flex;
     flex-direction: column;
@@ -211,6 +259,7 @@ function formatLastChecked(isoDate) {
     min-width: 2rem;
 }
 
+/* ✅ UNCHANGED: Table cell styles */
 .center {
     text-align: center;
 }

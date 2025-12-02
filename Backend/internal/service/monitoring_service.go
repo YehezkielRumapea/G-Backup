@@ -23,7 +23,7 @@ type MonitoringService interface {
 	RunRemoteChecks() error
 	StartMonitoringDaemon()
 	SyncRemotesWithRclone() error
-	ExtractEmailFromConfig(remoteName string) (string, error) // 🆕
+	ExtractEmailFromConfig(remoteName string) (string, error)
 }
 
 type monitoringServiceImpl struct {
@@ -32,7 +32,10 @@ type monitoringServiceImpl struct {
 	JobRepo     repository.JobRepository
 }
 
-const intervalCek = 5 * time.Minute
+const (
+	intervalCek  = 5 * time.Minute
+	intervalSync = 1 * time.Minute
+)
 
 func NewMonitoringService(mRepo repository.MonitoringRepository, lRepo repository.LogRepository, jRepo repository.JobRepository) MonitoringService {
 	return &monitoringServiceImpl{
@@ -155,76 +158,92 @@ func (s *monitoringServiceImpl) GetJobLogs() ([]models.Log, error) {
 }
 
 func (s *monitoringServiceImpl) SyncRemotesWithRclone() error {
-	fmt.Println("\n" + strings.Repeat("=", 60))
-	fmt.Println("[SYNC] Memulai sinkronisasi remote DB dengan rclone.conf")
-	fmt.Println(strings.Repeat("=", 60))
+	// ✅ CHANGED: Wider separator for better visibility
+	fmt.Println("\n" + strings.Repeat("=", 70)) // Was 60
+	// ✅ CHANGED: English + emoji for clarity
+	fmt.Println("[SYNC] 🔄 Starting database sync with rclone.conf")
+	fmt.Println(strings.Repeat("=", 70))
 
-	// 1. Ambil remote dari rclone.conf
-	fmt.Println("[SYNC] 1. Mengambil daftar remote dari rclone.conf...")
+	// 1. Get remotes from rclone.conf
+	// ✅ CHANGED: Numbered steps with emoji
+	fmt.Println("[SYNC] 1️⃣ Fetching remotes from rclone.conf...")
 	rcloneRemotes, err := s.GetRcloneConfiguredRemotes()
 	if err != nil {
-		fmt.Printf("[ERROR] Gagal mengambil remote dari rclone: %v\n", err)
-		return fmt.Errorf("gagal mengambil remote dari rclone: %w", err)
+		fmt.Printf("[ERROR] Failed to get remotes from rclone: %v\n", err)
+		return fmt.Errorf("failed to get remotes from rclone: %w", err)
 	}
-	fmt.Printf("[SYNC] ✓ Ditemukan %d remote di rclone.conf: %v\n", len(rcloneRemotes), rcloneRemotes)
+	// ✅ CHANGED: Better success message
+	fmt.Printf("[SYNC] ✓ Found %d remote(s) in rclone.conf: %v\n", len(rcloneRemotes), rcloneRemotes)
 
-	// 2. Ambil remote yang ada di database
-	fmt.Println("[SYNC] 2. Mengambil daftar remote dari database...")
+	// 2. Get remotes from database
+	fmt.Println("[SYNC] 2️⃣ Fetching remotes from database...")
 	dbRemotes, err := s.MonitorRepo.GetAllRemoteNames()
 	if err != nil {
-		fmt.Printf("[ERROR] Gagal mengambil remote dari DB: %v\n", err)
-		return fmt.Errorf("gagal mengambil remote dari DB: %w", err)
+		fmt.Printf("[ERROR] Failed to get remotes from DB: %v\n", err)
+		return fmt.Errorf("failed to get remotes from DB: %w", err)
 	}
-	fmt.Printf("[SYNC] ✓ Ditemukan %d remote di database: %v\n", len(dbRemotes), dbRemotes)
+	fmt.Printf("[SYNC] ✓ Found %d remote(s) in database: %v\n", len(dbRemotes), dbRemotes)
 
-	// 3. Cari remote yang dihapus dari rclone tapi masih ada di DB
-	fmt.Println("[SYNC] 3. Mencari remote yang dihapus dari rclone...")
+	// 3. Find remotes to delete
+	fmt.Println("[SYNC] 3️⃣ Finding remotes to delete...")
 	remoteToDelete := findMissingRemotes(dbRemotes, rcloneRemotes)
 
 	if len(remoteToDelete) > 0 {
-		fmt.Printf("[SYNC] ⚠️ Ditemukan %d remote yang sudah dihapus dari rclone: %v\n", len(remoteToDelete), remoteToDelete)
+		// ✅ CHANGED: Better emoji and message
+		fmt.Printf("[SYNC] 🗑️  Found %d remote(s) to delete: %v\n", len(remoteToDelete), remoteToDelete)
 
 		for _, remoteName := range remoteToDelete {
-			fmt.Printf("[SYNC] → Menghapus '%s' dari database...\n", remoteName)
+			fmt.Printf("[SYNC] → Deleting '%s' from database...\n", remoteName)
 			if err := s.MonitorRepo.DeleteRemoteByName(remoteName); err != nil {
-				fmt.Printf("[ERROR] Gagal menghapus '%s': %v\n", remoteName, err)
+				fmt.Printf("[ERROR] Failed to delete '%s': %v\n", remoteName, err)
 			} else {
-				fmt.Printf("[SYNC] ✓ Berhasil menghapus '%s'\n", remoteName)
+				fmt.Printf("[SYNC] ✓ Successfully deleted '%s'\n", remoteName)
 			}
 		}
+		// ... deletion logic sama ...
 	} else {
-		fmt.Println("[SYNC] ✓ Tidak ada remote yang perlu dihapus")
+		fmt.Println("[SYNC] ✓ No remotes to delete")
 	}
 
-	// 4. Cari remote baru dari rclone yang belum di DB
-	fmt.Println("[SYNC] 4. Mencari remote baru dari rclone...")
+	// 4. Find new remotes to add
+	fmt.Println("[SYNC] 4️⃣ Finding new remotes to add...")
 	remoteToAdd := findMissingRemotes(rcloneRemotes, dbRemotes)
 
 	if len(remoteToAdd) > 0 {
-		fmt.Printf("[SYNC] ℹ️ Ditemukan %d remote baru dari rclone: %v\n", len(remoteToAdd), remoteToAdd)
+		// ✅ CHANGED: Better emoji
+		fmt.Printf("[SYNC] ➕ Found %d new remote(s): %v\n", len(remoteToAdd), remoteToAdd)
 
 		for _, remoteName := range remoteToAdd {
-			fmt.Printf("[SYNC] → Menambahkan '%s' ke database...\n", remoteName)
+			fmt.Printf("[SYNC] → Adding '%s' to database...\n", remoteName)
 			monitor := &models.Monitoring{
 				RemoteName:    remoteName,
-				StatusConnect: "DISCONNECTED",
+				StatusConnect: "PENDING", // ✅ CHANGED: PENDING instead of DISCONNECTED
 				LastCheckedAt: time.Now(),
 			}
 			if err := s.MonitorRepo.UpsertRemoteStatus(monitor); err != nil {
-				fmt.Printf("[ERROR] Gagal menambah '%s': %v\n", remoteName, err)
+				fmt.Printf("[ERROR] Failed to add '%s': %v\n", remoteName, err)
 			} else {
-				fmt.Printf("[SYNC] ✓ Berhasil menambahkan '%s'\n", remoteName)
+				fmt.Printf("[SYNC] ✓ Successfully added '%s'\n", remoteName)
+
+				// ✅ NEW: Immediately check status for new remote
+				go func(name string) {
+					time.Sleep(1 * time.Second) // Brief delay
+					s.UpdateRemoteStatus(name)
+				}(remoteName)
 			}
 		}
 	} else {
-		fmt.Println("[SYNC] ✓ Tidak ada remote baru")
+		fmt.Println("[SYNC] ✓ No new remotes to add")
 	}
 
+	// ✅ NEW: Better summary message
 	if len(remoteToDelete) == 0 && len(remoteToAdd) == 0 {
-		fmt.Println("[SYNC] ✅ Remote DB sudah sesuai dengan rclone.conf")
+		fmt.Println("[SYNC] ✅ Database is already in sync with rclone.conf")
+	} else {
+		fmt.Printf("[SYNC] ✅ Sync completed: +%d added, -%d deleted\n", len(remoteToAdd), len(remoteToDelete))
 	}
 
-	fmt.Println(strings.Repeat("=", 60) + "\n")
+	fmt.Println(strings.Repeat("=", 70) + "\n")
 	return nil
 }
 
@@ -267,13 +286,29 @@ func (s *monitoringServiceImpl) StartMonitoringDaemon() {
 			return
 		}
 
-		ticker := time.NewTicker(intervalCek)
-		defer ticker.Stop()
+		statusTicker := time.NewTicker(intervalCek)
+		defer statusTicker.Stop()
 
-		for range ticker.C {
-			fmt.Println("[Daemon] Menjalankan remote check...")
-			if err := s.RunRemoteChecks(); err != nil {
-				fmt.Printf("⚠️ Daemon Error: %v\n", err)
+		syncTicker := time.NewTicker(intervalSync)
+		defer syncTicker.Stop()
+
+		for {
+			select {
+			case <-statusTicker.C:
+				fmt.Println("[Daemon] Menjalankan pengecekan status remote...")
+				if err := s.RunRemoteChecks(); err != nil {
+					fmt.Printf("⚠️ ERROR saat pengecekan remote: %v\n", err)
+				}
+
+			case <-syncTicker.C:
+				fmt.Println("[Daemon] Menjalankan sinkronisasi remote dengan rclone.conf...")
+				if err := s.SyncRemotesWithRclone(); err != nil {
+					fmt.Printf("⚠️ ERROR saat sinkronisasi remote: %v\n", err)
+				} else {
+					if err := s.RunRemoteChecks(); err != nil {
+						fmt.Printf("⚠️ ERROR saat pengecekan remote setelah sinkronisasi: %v\n", err)
+					}
+				}
 			}
 		}
 	}()
@@ -284,6 +319,13 @@ func (s *monitoringServiceImpl) RunRemoteChecks() error {
 	if err != nil {
 		return err
 	}
+
+	if len(remotes) == 0 {
+		fmt.Println("[Daemon] ℹ️ No remotes found in database")
+		return nil
+	}
+
+	fmt.Printf("[Daemon] 📡 Checking status for %d remote(s)...\n", len(remotes))
 
 	for _, remote := range remotes {
 		go s.UpdateRemoteStatus(remote.RemoteName)
