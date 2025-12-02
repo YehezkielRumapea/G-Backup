@@ -7,6 +7,7 @@
       </div>
     </div>
     
+    <!-- Script Preview Modal -->
     <ScriptPreview
       :is-visible="isModalVisible"
       :job-id="currentJobId"
@@ -16,28 +17,33 @@
 
     <!-- ✅ Edit Job Modal -->
     <EditJobModal
-      :job-id="editingJobId"
-      :is-open="isEditModalOpen"
-      @close="closeEditModal"
-      @success="handleEditSuccess"
+      :isVisible="showEditModal"
+      :jobData="selectedJob"
+      @close="showEditModal = false"
+      @success="handleUpdateSuccess"
     />
 
+    <!-- Loading State -->
     <div v-if="isLoading" class="status-message">
       <span class="loading-dot"></span>
       Memuat data...
     </div>
     
+    <!-- Error State -->
     <div v-if="errorMessage" class="status-message error">
       {{ errorMessage }}
       <button @click="fetchData" class="retry-btn">Coba Lagi</button>
     </div>
 
-    <div v-if="!isLoading && jobs && jobs.length === 0 && !errorMessage" class="empty-state">      <p>Tidak ada job terjadwal</p>
+    <!-- Empty State -->
+    <div v-if="!isLoading && jobs && jobs.length === 0 && !errorMessage" class="empty-state">
+      <p>Tidak ada job terjadwal</p>
       <router-link to="/create" class="btn-create">
         Buat Job Terjadwal
       </router-link>
     </div>
 
+    <!-- Jobs Table -->
     <div v-if="!isLoading && jobs.length > 0" class="table-container">
       <table class="jobs-table">
         <thead>
@@ -97,17 +103,19 @@ import SchedJobRow from '@/components/SchedJobRow.vue';
 import ScriptPreview from '@/components/ScriptPreview.vue';
 import EditJobModal from '@/components/EditJobModal.vue';
 
+// State untuk jobs list
 const jobs = ref([]);
 const isLoading = ref(true);
 const errorMessage = ref(null);
 
+// State untuk Script Preview Modal
 const isModalVisible = ref(false);
 const currentScript = ref('');
 const currentJobId = ref(null);
 
-// ✅ Edit modal state
-const editingJobId = ref(null);
-const isEditModalOpen = ref(false);
+// ✅ State untuk Edit Modal
+const selectedJob = ref(null);
+const showEditModal = ref(false);
 
 // ✅ Toast notification state
 const toast = ref({
@@ -116,6 +124,7 @@ const toast = ref({
   type: 'success', // 'success' | 'error' | 'info'
 });
 
+// ✅ Fetch scheduled jobs
 async function fetchData() {
   isLoading.value = true;
   errorMessage.value = null;
@@ -123,7 +132,7 @@ async function fetchData() {
   try {
     const data = await monitoringService.getScheduledJobs();
     jobs.value = Array.isArray(data) ? data : [];
-
+    console.log('✅ Scheduled jobs loaded:', jobs.value.length);
   } catch (error) {
     errorMessage.value = error.response?.data?.error || 'Gagal memuat data scheduled jobs.';
     console.error("Fetch Scheduled Jobs Error:", error);
@@ -132,29 +141,38 @@ async function fetchData() {
   }
 }
 
-onMounted(fetchData);
-
-// ✅ Handle edit job - Open modal with job ID
-function handleEdit(jobId) {
+// ✅ Handle Edit - Load job data terlebih dahulu
+async function handleEdit(jobId) {
   console.log('✅ handleEdit dipanggil dengan jobId:', jobId);
-  editingJobId.value = jobId;
-  isEditModalOpen.value = true;
+  
+  try {
+    showToast('Memuat data job...', 'info');
+    
+    // Fetch job data dari API
+    // Backend returns: { success: true, data: { id, job_name, ... } }
+    const response = await jobService.getJobById(jobId);
+    console.log('✅ Full response from API:', response);
+    
+    // ✅ Tidak perlu extract data di sini, biarkan EditJobModal yang handle
+    // EditJobModal akan menerima full response dan extract sendiri
+    selectedJob.value = response;
+    showEditModal.value = true;
+    
+    console.log('✅ Modal opened with data:', selectedJob.value);
+  } catch (error) {
+    console.error('❌ Error loading job:', error);
+    showToast('Gagal memuat data job untuk diedit', 'error');
+  }
 }
 
-// ✅ Close edit modal
-function closeEditModal() {
-  console.log('✅ closeEditModal dipanggil');
-  isEditModalOpen.value = false;
-  editingJobId.value = null;
-}
-
-// ✅ Handle edit success - Reload jobs and show toast
-function handleEditSuccess() {
-  console.log('✅ handleEditSuccess dipanggil');
-  fetchData(); // Reload jobs list
+// ✅ Handle Update Success
+function handleUpdateSuccess() {
+  console.log('✅ Job berhasil diupdate');
+  fetchData(); // Refresh job list
   showToast('Job berhasil diperbarui!', 'success');
 }
 
+// ✅ Handle Trigger Job
 async function handleTrigger(jobId) {
   if (!confirm(`Apakah Anda yakin ingin menjalankan job ID ${jobId} sekarang?`)) {
     return;
@@ -163,13 +181,18 @@ async function handleTrigger(jobId) {
   try {
     await jobService.triggerManualJob(jobId);
     showToast(`Job ${jobId} berhasil di-trigger! Status akan diperbarui.`, 'success');
-    fetchData();
+    
+    // Refresh job list setelah trigger
+    setTimeout(() => {
+      fetchData();
+    }, 1000);
   } catch (error) {
     const errorMsg = error.response?.data?.error || error.message || String(error);
     showToast(`Gagal men-trigger job: ${errorMsg}`, 'error');
   }
 }
 
+// ✅ Handle View Script
 async function handleViewScript(jobId) {
   try {
     isModalVisible.value = true;
@@ -185,6 +208,7 @@ async function handleViewScript(jobId) {
   }
 }
 
+// ✅ Handle Delete Job
 async function handleDeleteJob(jobId, jobName) {
   if (!confirm(`Apakah Anda yakin ingin menghapus job "${jobName}"?`)) {
     return;
@@ -193,20 +217,21 @@ async function handleDeleteJob(jobId, jobName) {
   try {
     await jobService.deleteJob(jobId);
     showToast('Job berhasil dihapus!', 'success');
-    fetchData();
+    fetchData(); // Refresh job list
   } catch (error) {
     const errorMsg = error.response?.data?.error || error.message || 'Gagal menghapus job';
     showToast(errorMsg, 'error');
   }
 }
 
+// Close Script Preview Modal
 function closeModal() {
   isModalVisible.value = false;
   currentScript.value = '';
   currentJobId.value = null;
 }
 
-// ✅ Show toast notification
+// ✅ Toast Notification Helper
 function showToast(message, type = 'success') {
   toast.value = { show: true, message, type };
   setTimeout(() => {
@@ -223,6 +248,9 @@ function getToastClass(type) {
   };
   return classes[type] || 'toast-info';
 }
+
+// Initial load
+onMounted(fetchData);
 </script>
 
 <style scoped>

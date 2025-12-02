@@ -7,6 +7,7 @@
       </div>
     </div>
     
+    <!-- Script Preview Modal -->
     <ScriptPreview
       :is-visible="isModalVisible"
       :job-id="currentJobId"
@@ -15,24 +16,26 @@
     />
 
     <!-- ✅ Edit Job Modal -->
-    <EditJobModal
-      :job-id="editingJobId"
-      :is-open="isEditModalOpen"
-      @close="closeEditModal"
-      @success="handleEditSuccess"
+    <EditJobModal 
+      :isVisible="showEditModal" 
+      :jobData="selectedJob"
+      @close="showEditModal = false"
+      @success="handleUpdateSuccess"
     />
 
+    <!-- Loading State -->
     <div v-if="isLoading" class="status-message">
       <span class="loading-dot"></span>
       Memuat data...
     </div>
     
+    <!-- Error State -->
     <div v-if="errorMessage" class="status-message error">
       {{ errorMessage }}
       <button @click="fetchData" class="retry-btn">Coba Lagi</button>
     </div>
 
-    <!-- ✅ BACKUP JOBS SECTION -->
+    <!-- Empty State -->
     <div v-if="!isLoading && backupJobs.length === 0 && !errorMessage" class="empty-state">
       <p>Tidak ada template job manual yang ditemukan</p>
       <router-link to="/create" class="btn-create">
@@ -40,6 +43,7 @@
       </router-link>
     </div>
 
+    <!-- ✅ BACKUP JOBS SECTION -->
     <div v-if="!isLoading && backupJobs.length > 0" class="table-container">
       <table class="jobs-table">
         <thead>
@@ -129,17 +133,21 @@ import ManualJobRow from '@/components/ManualJobRow.vue';
 import ScriptPreview from '@/components/ScriptPreview.vue';
 import EditJobModal from '@/components/EditJobModal.vue';
 
+// State untuk jobs list
 const jobs = ref([]);
 const isLoading = ref(true);
 const errorMessage = ref(null);
 
+// State untuk Script Preview Modal
 const isModalVisible = ref(false);
 const currentScript = ref('');
 const currentJobId = ref(null);
 
-const editingJobId = ref(null);
-const isEditModalOpen = ref(false);
+// ✅ State untuk Edit Modal
+const selectedJob = ref(null);
+const showEditModal = ref(false);
 
+// State untuk Toast
 const toast = ref({
   show: false,
   message: '',
@@ -155,6 +163,7 @@ const restoreJobs = computed(() => {
   return jobs.value.filter(job => job.operation_mode === 'RESTORE');
 });
 
+// ✅ Fetch all jobs
 async function fetchData() {
   isLoading.value = true;
   errorMessage.value = null;
@@ -162,6 +171,7 @@ async function fetchData() {
   try {
     const data = await jobService.getManualJobs();
     jobs.value = data;
+    console.log('✅ Jobs loaded:', jobs.value.length);
   } catch (error) {
     errorMessage.value = error.response?.data?.error || 'Gagal memuat data manual jobs.';
     console.error("Fetch Manual Jobs Error:", error);
@@ -170,26 +180,38 @@ async function fetchData() {
   }
 }
 
-onMounted(fetchData);
-
-function handleEdit(jobId) {
+// ✅ Handle Edit - Load job data terlebih dahulu
+async function handleEdit(jobId) {
   console.log('✅ handleEdit dipanggil dengan jobId:', jobId);
-  editingJobId.value = jobId;
-  isEditModalOpen.value = true;
+  
+  try {
+    showToast('Memuat data job...', 'info');
+    
+    // Fetch job data dari API
+    // Backend returns: { success: true, data: { id, job_name, ... } }
+    const response = await jobService.getJobById(jobId);
+    console.log('✅ Full response from API:', response);
+    
+    // ✅ Tidak perlu extract data di sini, biarkan EditJobModal yang handle
+    // EditJobModal akan menerima full response dan extract sendiri
+    selectedJob.value = response.data;
+    showEditModal.value = true;
+    
+    console.log('✅ Modal opened with data:', selectedJob.value);
+  } catch (error) {
+    console.error('❌ Error loading job:', error);
+    showToast('Gagal memuat data job untuk diedit', 'error');
+  }
 }
 
-function closeEditModal() {
-  console.log('✅ closeEditModal dipanggil');
-  isEditModalOpen.value = false;
-  editingJobId.value = null;
-}
-
-function handleEditSuccess() {
-  console.log('✅ handleEditSuccess dipanggil');
-  fetchData();
+// ✅ Handle Update Success
+function handleUpdateSuccess() {
+  console.log('✅ Job berhasil diupdate');
+  fetchData(); // Refresh job list
   showToast('Job berhasil diperbarui!', 'success');
 }
 
+// ✅ Handle Delete
 async function handleDelete(jobId, jobName) {
   if (!confirm(`Apakah Anda yakin ingin menghapus job "${jobName}"?`)) {
     return;
@@ -198,15 +220,14 @@ async function handleDelete(jobId, jobName) {
   try {
     await jobService.deleteJob(jobId);
     showToast('Job berhasil dihapus!', 'success');
-    fetchData();
+    fetchData(); // Refresh job list
   } catch (error) {
     const errorMsg = error.response?.data?.error || error.message || 'Gagal menghapus job';
     showToast(errorMsg, 'error');
   }
 }
 
-/*************  ✨ Windsurf Command ⭐  *************/
-/*******  5cdcc004-fb80-4af4-a922-c1b4949aeb56  *******/
+// ✅ Handle Trigger Manual Job
 async function handleTrigger(jobId) {
   if (!confirm(`Apakah Anda yakin ingin menjalankan job manual ID ${jobId} sekarang?`)) {
     return;
@@ -215,13 +236,18 @@ async function handleTrigger(jobId) {
   try {
     await jobService.triggerManualJob(jobId);
     showToast(`Job ${jobId} berhasil di-trigger! Status akan diperbarui.`, 'success');
-    fetchData();
+    
+    // Refresh job list setelah trigger
+    setTimeout(() => {
+      fetchData();
+    }, 1000);
   } catch (error) {
     const errorMsg = error.response?.data?.error || error.message || String(error);
     showToast(`Gagal men-trigger job: ${errorMsg}`, 'error');
   }
 }
 
+// ✅ Handle View Script
 async function handleViewScript(jobId) {
   try {
     isModalVisible.value = true;
@@ -237,12 +263,14 @@ async function handleViewScript(jobId) {
   }
 }
 
+// Close Script Preview Modal
 function closeModal() {
   isModalVisible.value = false;
   currentScript.value = '';
   currentJobId.value = null;
 }
 
+// ✅ Toast Notification Helper
 function showToast(message, type = 'success') {
   toast.value = { show: true, message, type };
   setTimeout(() => {
@@ -258,6 +286,9 @@ function getToastClass(type) {
   };
   return classes[type] || 'toast-info';
 }
+
+// Initial load
+onMounted(fetchData);
 </script>
 
 <style scoped>
