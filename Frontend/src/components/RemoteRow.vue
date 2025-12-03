@@ -1,19 +1,26 @@
 <template>
     <tr>
-        <!-- ✅ UNCHANGED: Remote Name Column -->
+        <!-- ✅ UPDATED: Remote Name Column - Clickable untuk browse -->
         <td>
             <div class="remote-name-wrapper">
-                <div class="remote-icon"><strong>{{ remote.remote_name }}</strong></div>
+                <button 
+                    @click="openFileBrowser" 
+                    class="remote-name-btn"
+                    :title="`Browse files in ${remote.remote_name}`"
+                >
+                    <span class="drive-icon"></span>
+                    <strong>{{ remote.remote_name }}</strong>
+                </button>
             </div>
             <div v-if="remote.system_message" class="warning">
                 {{ remote.system_message }}
             </div>
         </td>
         
-        <!-- ✅ NEW: Email Column with Truncation and Tooltip -->
+        <!-- ✅ UNCHANGED: Email Column with Truncation and Tooltip -->
         <td>
             <div v-if="remote.email" class="email-cell" :title="remote.email">
-                <span class="email-icon"></span>
+                <span class="email-icon">📧</span>
                 <span class="email-text">{{ truncatedEmail }}</span>
             </div>
             <div v-else class="email-cell">
@@ -50,10 +57,19 @@
         <!-- ✅ UNCHANGED: Last Checked Column -->
         <td class="text-muted">{{ formatLastChecked(remote.last_checked_at) }}</td>
     </tr>
+
+    <!-- ✅ NEW: File Browser Modal -->
+    <FileBrowserModal
+        :isVisible="showFileBrowser"
+        :remoteName="remote.remote_name"
+        @close="showFileBrowser = false"
+        @select-file="handleFileSelect"
+    />
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { ref, computed } from 'vue';
+import FileBrowserModal from '@/components/FileBrowse.vue';
 
 const props = defineProps({
     remote: {
@@ -61,6 +77,20 @@ const props = defineProps({
         required: true
     }
 });
+
+// ✅ NEW: State untuk File Browser Modal
+const showFileBrowser = ref(false);
+
+// ✅ NEW: Function untuk open file browser
+function openFileBrowser() {
+    showFileBrowser.value = true;
+}
+
+// ✅ NEW: Function untuk handle file selection (optional)
+function handleFileSelect(fileData) {
+    console.log('File selected:', fileData);
+    // Bisa tambah logic lain jika diperlukan
+}
 
 // ✅ UNCHANGED: Existing computed properties
 const used = computed(() => props.remote.used_storage_gb || 0);
@@ -78,26 +108,23 @@ const usedFormatted = computed(() => {
 
 const totalFormatted = computed(() => total.value.toFixed(2));
 
-// ✅ NEW: Truncate email for display
+// ✅ UNCHANGED: Truncate email for display
 const truncatedEmail = computed(() => {
     const email = props.remote.email || '';
-    const maxLength = 25; // Adjust based on your needs
+    const maxLength = 25;
     
     if (email.length <= maxLength) {
         return email;
     }
     
-    // Split email into username and domain
     const [username, domain] = email.split('@');
     
     if (!domain) return email;
     
-    // If username is too long, truncate it
     if (username.length > 15) {
         return `${username.substring(0, 12)}...@${domain}`;
     }
     
-    // If domain is too long, show ellipsis
     if (domain.length > 15) {
         return `${username}@${domain.substring(0, 12)}...`;
     }
@@ -105,7 +132,7 @@ const truncatedEmail = computed(() => {
     return email;
 });
 
-// ✅ NEW: Helper function for status class
+// ✅ UNCHANGED: Helper function for status class
 function getStatusClass(status) {
     if (!status) return 'pending';
     return status.toLowerCase();
@@ -130,39 +157,59 @@ function formatLastChecked(isoDate) {
 </script>
 
 <style scoped>
-/* ✅ REMOVED: Old tooltip styles (no longer needed) */
+/* ✅ NEW: Remote Name Button Styles */
+.remote-name-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: none;
+    border: none;
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    font-size: 0.90rem;
+    margin: -0.5rem 0;
+}
 
-/* ✅ CHANGED: Simplified remote name wrapper */
+
+.remote-name-btn:active {
+    transform: translateX(2px);
+}
+
+.drive-icon {
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+
+.remote-name-btn strong {
+    color: #3498db;
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 3px;
+    transition: color 0.2s ease;
+}
+
+.remote-name-btn:hover strong {
+    color: #2980b9;
+}
+
+/* ✅ UPDATED: Simplified remote name wrapper */
 .remote-name-wrapper {
     display: inline-block;
 }
 
-.remote-icon {
-    font-size: 0.90rem;
-    margin-bottom: 0.25rem;
-}
+/* ✅ REMOVED: Old .remote-icon styles (diganti dengan button) */
 
-.remote-icon strong {
-    color: #1a1a1a;
-    font-weight: 600;
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-    transition: all 0.2s ease;
-}
-
-.remote-icon strong:hover {
-    background-color: #ecf0f1;
-    color: #3498db;
-}
-
-/* ✅ NEW: Email cell styles */
+/* ✅ UNCHANGED: Email cell styles */
 .email-cell {
     display: flex;
     align-items: center;
     gap: 0.5rem;
     font-size: 0.85rem;
-    max-width: 200px; /* Limit width to prevent table expansion */
-    cursor: help; /* Show help cursor on hover */
+    max-width: 200px;
+    cursor: help;
 }
 
 .email-icon {
@@ -208,7 +255,6 @@ function formatLastChecked(isoDate) {
     background-color: #e74c3c;
 }
 
-/* ✅ NEW: Pending status style */
 .status.pending {
     background-color: #f39c12;
 }
@@ -272,5 +318,21 @@ function formatLastChecked(isoDate) {
 td {
     padding: 0.75rem;
     vertical-align: middle;
+}
+
+/* ✅ NEW: Responsive styles */
+@media (max-width: 768px) {
+    .remote-name-btn {
+        font-size: 0.85rem;
+        padding: 0.4rem 0.6rem;
+    }
+    
+    .drive-icon {
+        font-size: 1rem;
+    }
+    
+    .email-cell {
+        max-width: 150px;
+    }
 }
 </style>
