@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -341,8 +340,6 @@ func (s *backupServiceImpl) handleJobCompletion(job models.ScheduledJob, result 
 	// Jika Gagal: Ambil output + Error message
 	logMessage := result.Output
 	if status != "SUCCESS" {
-		logMessage = ""
-	} else {
 		logMessage = result.ErrorMsg
 	}
 
@@ -547,17 +544,7 @@ func (s *backupServiceImpl) CleanupOldBackups(remoteName, destinationPath string
 		return fmt.Errorf("failed to parse rclone output: %w", err)
 	}
 
-	var backupItems []RcloneFileInfo
-	// Regex untuk match file dengan format timestamp: _YYYYMMDD_HHMMSS
-	timestampPattern := regexp.MustCompile(`_\d{8}_\d{6}`)
-
-	// Filter file yang match pattern timestamp
-	for _, f := range files {
-		if timestampPattern.MatchString(f.Name) {
-			backupItems = append(backupItems, f)
-		}
-	}
-
+	backupItems := files
 	currentCount := len(backupItems)
 	fmt.Printf("[Round Robin] Found %d backup items (limit: %d)\n", currentCount, maxRetention)
 
