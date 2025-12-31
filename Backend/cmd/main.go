@@ -1,3 +1,4 @@
+// cmd/main.go
 package main
 
 import (
@@ -8,7 +9,6 @@ import (
 	"path/filepath"
 	"time"
 
-	// Import semua package yang dibutuhkan
 	"gbackup-new/backend/internal/handler"
 	"gbackup-new/backend/internal/repository"
 	"gbackup-new/backend/internal/service"
@@ -28,7 +28,6 @@ func loadDotEnv() {
 	}
 	exeDir := filepath.Dir(exePath)
 
-	// Searching .env di lokal
 	candidates := []string{
 		filepath.Join(exeDir, ".env"),
 		filepath.Join(exeDir, "..", ".env"),
@@ -38,7 +37,7 @@ func loadDotEnv() {
 	for _, p := range candidates {
 		if _, err := os.Stat(p); err == nil {
 			if err := godotenv.Load(p); err == nil {
-				fmt.Println("Loaded .env dari:", p)
+				fmt.Println("✅ Loaded .env dari:", p)
 				return
 			}
 		}
@@ -46,98 +45,103 @@ func loadDotEnv() {
 
 	_ = godotenv.Load(".env", "../.env")
 }
+
 func main() {
-	// --- 1. MEMUAT .ENV ---
 	loadDotEnv()
 
-	// Ambil Kunci JWT (Wajib)
 	jwtSecretKey := os.Getenv("JWT_SECRET_KEY")
 	if jwtSecretKey == "" {
-		log.Fatal("FATAL: JWT_SECRET_KEY ada")
+		log.Fatal("FATAL: JWT_SECRET_KEY tidak ada")
 	}
 
-	// --- 2. KONEKSI DATABASE ---
 	dbInstance := database.Connect()
 	if dbInstance == nil {
 		log.Fatal("Koneksi DB gagal, instance GORM nil.")
 	}
 
-	// --- 3. DEPENDENCY INJECTION (DI) ---
-
-	// 3.1. Inisialisasi Repository (Lapisan Data Access)
+	// Repositories
 	userRepo := repository.NewUserRepository(dbInstance)
 	jobRepo := repository.NewJobRepository(dbInstance)
 	logRepo := repository.NewLogRepository(dbInstance)
 	monitorRepo := repository.NewMonitoringRepository(dbInstance)
 	browserRepo := repository.NewBrowserRepository()
 
-	// 3.2. Inisialisasi Service (Lapisan Logika Bisnis)
+	// Services
 	authSvc := service.NewAuthService(userRepo, jwtSecretKey)
 	monitorSvc := service.NewMonitoringService(monitorRepo, logRepo, jobRepo)
-	backupSvc := service.NewBackupService(jobRepo, logRepo, monitorRepo, monitorSvc) // Orkestrator 3 Fase
+	backupSvc := service.NewBackupService(jobRepo, logRepo, monitorRepo, monitorSvc)
 	schedulerSvc := service.NewSchedulerService(jobRepo, backupSvc)
 	browserSvc := service.NewBrowserService(browserRepo)
 
-	// 3.3. Inisialisasi Handler (Controller Layer)
+	// ✅ Remote Service - NO BASE_URL needed!
+	remoteSvc := service.NewAddRemoteService()
+
+	// Handlers
 	authHandler := handler.NewAuthHandler(authSvc)
 	monitorHandler := handler.NewMonitoringHandler(monitorSvc, schedulerSvc, logRepo)
-	jobHandler := handler.NewJobHandler(schedulerSvc, backupSvc, jobRepo) // Membutuhkan BackupSvc untuk TriggerManual
+	jobHandler := handler.NewJobHandler(schedulerSvc, backupSvc, jobRepo)
 	backupHandler := handler.NewBackupHandler(backupSvc)
 	restoreHandler := handler.NewRestoreHandler(backupSvc)
 	browserHandler := handler.NewBrowserHandler(browserSvc)
 	setupHandler := handler.NewSetupHandler(authSvc)
+	remoteHandler := handler.NewAddRemoteHandler(remoteSvc)
 
-	// --- 5. SETUP WEB SERVER ECHO ---
+	// Echo Setup
 	e := echo.New()
 	e.Use(echomid.Logger())
 	e.Use(echomid.Recover())
 	e.Use(echomid.CORSWithConfig(echomid.CORSConfig{
-		AllowOrigins: []string{"http://localhost:5173"}, // URL Frontend
-		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodDelete},
+		AllowOrigins: []string{"http://localhost:5173"},
+		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodDelete, http.MethodPut},
 	}))
 
-	// --- 6. SETUP ROUTING ---
 	e.GET("/", func(c echo.Context) error {
 		return c.String(http.StatusOK, "G-Backup New Architecture is Running!")
 	})
 
-	// Rute Publik (Login)
+	// Public Routes
 	e.POST("/api/v1/auth/login", authHandler.Login)
+	e.GET("/api/v1/remote/oauth-callback", remoteHandler.OAuthCallback)
+
 	setupGroup := e.Group("/api/v1/setup")
-	setupGroup.GET("/status", setupHandler.GetSetupStatus)          // Cek apakah admin sudah ada
-	setupGroup.POST("/register", setupHandler.RegisterInitialAdmin) // Registrasi admin pertama
+	setupGroup.GET("/status", setupHandler.GetSetupStatus)
+	setupGroup.POST("/register", setupHandler.RegisterInitialAdmin)
 
-	// Rute Privat
+	// Protected Routes
 	r := e.Group("/api/v1")
-	r.Use(echojwt.WithConfig(echojwt.Config{
-		SigningKey: []byte(jwtSecretKey),
-	})) // Menerapkan Middleware JWT
+	r.Use(echojwt.WithConfig(echojwt.Config{SigningKey: []byte(jwtSecretKey)}))
 
-	// Rute Monitoring dan Logs
+	// Monitoring
 	r.GET("/monitoring/remotes", monitorHandler.GetRemoteStatusList)
 	r.GET("/monitoring/logs", monitorHandler.GetJobLogs)
 	r.GET("/monitoring/jobs", monitorHandler.GetScheduledJobs)
 	r.GET("/monitoring/drivemail", monitorHandler.GetRemotes)
 
-	// Rute Job Management (Create, List, Trigger)
-	r.GET("/jobs/scheduled", jobHandler.GetScheduledJobs)    // List Job Monitoring
-	r.GET("/jobs/script/:id", jobHandler.GetJobScript)       // Pratinjau Script
-	r.POST("/jobs/trigger/:id", jobHandler.TriggerManualJob) // Tombol "Run Now"
-	r.GET("/jobs/manual", jobHandler.GetManualJob)           // List Job Manual
-	r.DELETE("/jobs/delete/:id", jobHandler.DeleteJob)       // Hapus Job
-	r.PUT("/jobs/update/:id", jobHandler.UpdateJob)          // Update Job
-	r.GET("/jobs/:id", jobHandler.GetJobByID)                // Get Job by ID
-	r.GET("/jobs/alljobs", monitorHandler.GetAllJobs)        // Get All Jobs (scheduled + Manual)
+	// Jobs
+	r.GET("/jobs/scheduled", jobHandler.GetScheduledJobs)
+	r.GET("/jobs/script/:id", jobHandler.GetJobScript)
+	r.POST("/jobs/trigger/:id", jobHandler.TriggerManualJob)
+	r.GET("/jobs/manual", jobHandler.GetManualJob)
+	r.DELETE("/jobs/delete/:id", jobHandler.DeleteJob)
+	r.PUT("/jobs/update/:id", jobHandler.UpdateJob)
+	r.GET("/jobs/:id", jobHandler.GetJobByID)
+	r.GET("/jobs/alljobs", monitorHandler.GetAllJobs)
 
-	// Rute Aksi
-	r.POST("/jobs/new", backupHandler.CreateNewJob)               // Create Backup (Manual/Auto)
-	r.POST("/jobs/restore", restoreHandler.TriggerRestore)        // Create Restore
-	r.GET("/browser/files", browserHandler.ListFiles)             //browse files
-	r.GET("/browser/remotes", browserHandler.GetAvailableRemotes) //list remotes
-	r.GET("/browser/info", browserHandler.GetFileInfo)            //file info
+	// Actions
+	r.POST("/jobs/new", backupHandler.CreateNewJob)
+	r.POST("/jobs/restore", restoreHandler.TriggerRestore)
+	r.GET("/browser/files", browserHandler.ListFiles)
+	r.GET("/browser/remotes", browserHandler.GetAvailableRemotes)
+	r.GET("/browser/info", browserHandler.GetFileInfo)
 
-	// --- 7. START DAEMONS (Goroutines) ---
-	schedulerSvc.StartDaemon() // Memulai CRON Daemon
+	// ✅ Remote Management Routes
+	r.POST("/remote/init-auth", remoteHandler.InitAuth)
+	r.POST("/remote/finalize", remoteHandler.FinalizeConfig)
+	r.DELETE("/remote/:name", remoteHandler.DeleteRemote)
+	r.GET("/remote/list", remoteHandler.ListRemotes)
+
+	// Start Daemons
+	schedulerSvc.StartDaemon()
 	monitorSvc.StartMonitoringDaemon()
 
 	go func() {
@@ -161,12 +165,13 @@ func main() {
 				go monitorSvc.UpdateRemoteStatus(remote.RemoteName)
 			}
 		} else {
-			fmt.Println("⚠️ Tidak ada remote yang dikonfigurasi di rclone.conf")
+			fmt.Println("⚠️  Tidak ada remote yang dikonfigurasi di rclone.conf")
 		}
 
 		fmt.Println("✅ Inisialisasi remote monitoring selesai.")
 	}()
 
-	fmt.Println("\nBackend diinisialisasi. Menjalankan Echo server di port 8080")
+	fmt.Println("\n✅ Backend diinisialisasi. Menjalankan Echo server di port 8080")
+	fmt.Println("📍 Remote OAuth: Dynamic redirect URI (no configuration needed)")
 	e.Logger.Fatal(e.Start(":8080"))
 }

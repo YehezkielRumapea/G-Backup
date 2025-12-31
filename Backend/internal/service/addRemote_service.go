@@ -20,56 +20,60 @@ import (
 )
 
 type AddRemoteService interface {
-	InitAuth(remoteName string) (authURL string, state string, err error)
+	InitAuth(remoteName string, baseURL string) (authURL string, state string, err error)
 	FinalizeAuth(code, state string) (remoteName string, err error)
 	DeleteRemote(remoteName string) error
 	ListRemotes() ([]string, error)
-	VerifyRemote(remoteName string) error
 }
 
 type addremoteServiceImpl struct {
-	redirectURI string
-	sessions    sync.Map
+	sessions sync.Map
 }
 
 type authSession struct {
-	RemoteName string
-	Timestamp  time.Time
+	RemoteName  string
+	RedirectURI string
+	Timestamp   time.Time
 }
 
-func NewAddRemoteService(redirectURI string) AddRemoteService {
-	service := &addremoteServiceImpl{
-		redirectURI: redirectURI,
-	}
-
+func NewAddRemoteService() AddRemoteService {
+	service := &addremoteServiceImpl{}
 	go service.cleanupExpiredSessions()
-
 	return service
 }
 
-// ============================================================
-// PUBLIC METHODS
-// ============================================================
-
-func (s *addremoteServiceImpl) InitAuth(remoteName string) (string, string, error) {
+func (s *addremoteServiceImpl) InitAuth(remoteName string, baseURL string) (string, string, error) {
 	if err := s.validateRemoteName(remoteName); err != nil {
 		return "", "", err
 	}
 
 	if s.remoteExistsInRclone(remoteName) {
-		return "", "", errors.New("remote name already exists in rclone config")
+		return "", "", errors.New("remote name already exists")
 	}
 
 	state := generateStateToken()
+	redirectURI := baseURL + "/api/v1/remote/oauth-callback"
 
 	s.sessions.Store(state, authSession{
-		RemoteName: remoteName,
-		Timestamp:  time.Now(),
+		RemoteName:  remoteName,
+		RedirectURI: redirectURI,
+		Timestamp:   time.Now(),
 	})
 
-	authURL := s.buildGoogleAuthURL(state)
-
+	authURL := s.buildGoogleAuthURL(state, redirectURI)
 	return authURL, state, nil
+}
+
+func (s *addremoteServiceImpl) buildGoogleAuthURL(state, redirectURI string) string {
+	params := url.Values{}
+	params.Set("client_id", "202264815644.apps.googleusercontent.com")
+	params.Set("redirect_uri", redirectURI)
+	params.Set("response_type", "code")
+	params.Set("scope", "https://www.googleapis.com/auth/drive")
+	params.Set("access_type", "offline")
+	params.Set("state", state)
+	params.Set("prompt", "consent")
+	return "https://accounts.google.com/o/oauth2/auth?" + params.Encode()
 }
 
 func (s *addremoteServiceImpl) FinalizeAuth(code, state string) (string, error) {
@@ -85,13 +89,13 @@ func (s *addremoteServiceImpl) FinalizeAuth(code, state string) (string, error) 
 		return "", errors.New("session expired")
 	}
 
-	token, err := s.exchangeCodeForToken(code)
+	token, err := s.exchangeCodeForToken(code, session.RedirectURI)
 	if err != nil {
 		return "", fmt.Errorf("failed to exchange token: %w", err)
 	}
 
 	if err := s.createRcloneConfig(session.RemoteName, token); err != nil {
-		return "", fmt.Errorf("failed to create rclone config: %w", err)
+		return "", fmt.Errorf("failed to create config: %w", err)
 	}
 
 	if err := s.verifyRemoteConnection(session.RemoteName); err != nil {
@@ -102,65 +106,15 @@ func (s *addremoteServiceImpl) FinalizeAuth(code, state string) (string, error) 
 	return session.RemoteName, nil
 }
 
-func (s *addremoteServiceImpl) DeleteRemote(remoteName string) error {
-	if !s.remoteExistsInRclone(remoteName) {
-		return errors.New("remote not found in rclone config")
-	}
-
-	return s.deleteRcloneConfig(remoteName)
-}
-
-func (s *addremoteServiceImpl) ListRemotes() ([]string, error) {
-	cmd := exec.Command("rclone", "listremotes")
-
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("failed to list remotes: %w", err)
-	}
-
-	var remotes []string
-	for _, line := range strings.Split(string(output), "\n") {
-		line = strings.TrimSpace(line)
-		if line != "" {
-			remotes = append(remotes, strings.TrimSuffix(line, ":"))
-		}
-	}
-
-	return remotes, nil
-}
-
-func (s *addremoteServiceImpl) VerifyRemote(remoteName string) error {
-	return s.verifyRemoteConnection(remoteName)
-}
-
-// ============================================================
-// PRIVATE HELPERS
-// ============================================================
-
-func (s *addremoteServiceImpl) buildGoogleAuthURL(state string) string {
-	params := url.Values{}
-	params.Set("client_id", "202264815644.apps.googleusercontent.com")
-	params.Set("redirect_uri", s.redirectURI)
-	params.Set("response_type", "code")
-	params.Set("scope", "https://www.googleapis.com/auth/drive")
-	params.Set("access_type", "offline")
-	params.Set("state", state)
-	params.Set("prompt", "consent")
-
-	return "https://accounts.google.com/o/oauth2/auth?" + params.Encode()
-}
-
-func (s *addremoteServiceImpl) exchangeCodeForToken(code string) (string, error) {
-	tokenURL := "https://oauth2.googleapis.com/token"
-
+func (s *addremoteServiceImpl) exchangeCodeForToken(code, redirectURI string) (string, error) {
 	data := url.Values{}
 	data.Set("code", code)
 	data.Set("client_id", "202264815644.apps.googleusercontent.com")
 	data.Set("client_secret", "X4Z3ca8xfWDb1Voo-F9a7ZxJ")
-	data.Set("redirect_uri", s.redirectURI)
+	data.Set("redirect_uri", redirectURI)
 	data.Set("grant_type", "authorization_code")
 
-	resp, err := http.PostForm(tokenURL, data)
+	resp, err := http.PostForm("https://oauth2.googleapis.com/token", data)
 	if err != nil {
 		return "", err
 	}
@@ -197,7 +151,6 @@ func (s *addremoteServiceImpl) exchangeCodeForToken(code string) (string, error)
 	if err != nil {
 		return "", err
 	}
-
 	return string(tokenJSON), nil
 }
 
@@ -206,20 +159,15 @@ func (s *addremoteServiceImpl) createRcloneConfig(remoteName, token string) erro
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "rclone", "config", "create",
-		remoteName,
-		"drive",
-		"token", token,
-		"scope", "drive",
-	)
+		remoteName, "drive", "token", token, "scope", "drive")
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("rclone config create failed: %w, stderr: %s", err, stderr.String())
+		return fmt.Errorf("failed: %w, stderr: %s", err, stderr.String())
 	}
-
 	return nil
 }
 
@@ -228,47 +176,63 @@ func (s *addremoteServiceImpl) verifyRemoteConnection(remoteName string) error {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "rclone", "lsd", remoteName+":", "--max-depth", "1")
-
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("verification failed: %w, stderr: %s", err, stderr.String())
 	}
-
 	return nil
+}
+
+func (s *addremoteServiceImpl) DeleteRemote(remoteName string) error {
+	if !s.remoteExistsInRclone(remoteName) {
+		return errors.New("remote not found")
+	}
+	return s.deleteRcloneConfig(remoteName)
 }
 
 func (s *addremoteServiceImpl) deleteRcloneConfig(remoteName string) error {
 	cmd := exec.Command("rclone", "config", "delete", remoteName)
-
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("delete failed: %w, stderr: %s", err, stderr.String())
 	}
-
 	return nil
+}
+
+func (s *addremoteServiceImpl) ListRemotes() ([]string, error) {
+	cmd := exec.Command("rclone", "listremotes")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list remotes: %w", err)
+	}
+
+	var remotes []string
+	for _, line := range strings.Split(string(output), "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			remotes = append(remotes, strings.TrimSuffix(line, ":"))
+		}
+	}
+	return remotes, nil
 }
 
 func (s *addremoteServiceImpl) remoteExistsInRclone(remoteName string) bool {
 	cmd := exec.Command("rclone", "listremotes")
-
 	output, err := cmd.Output()
 	if err != nil {
 		return false
 	}
 
-	remotes := string(output)
 	expectedRemote := remoteName + ":"
-
-	for _, line := range strings.Split(remotes, "\n") {
+	for _, line := range strings.Split(string(output), "\n") {
 		if strings.TrimSpace(line) == expectedRemote {
 			return true
 		}
 	}
-
 	return false
 }
 
@@ -277,11 +241,11 @@ func (s *addremoteServiceImpl) validateRemoteName(name string) error {
 		return errors.New("remote name cannot be empty")
 	}
 	if len(name) > 64 {
-		return errors.New("remote name too long (max 64 characters)")
+		return errors.New("remote name too long")
 	}
 	matched, _ := regexp.MatchString("^[a-z0-9-]+$", name)
 	if !matched {
-		return errors.New("remote name can only contain lowercase letters, numbers, and dashes")
+		return errors.New("invalid remote name format")
 	}
 	return nil
 }

@@ -443,6 +443,7 @@ func (s *monitoringServiceImpl) ExtractEmailFromConfig(remoteName string) (strin
 	// ============================================================
 	// Parse JSON token untuk ambil access_token
 	// ============================================================
+
 	var tokenData struct {
 		AccessToken string `json:"access_token"`
 	}
@@ -476,7 +477,7 @@ func (s *monitoringServiceImpl) ExtractEmailFromConfig(remoteName string) (strin
 // ============================================================
 func (s *monitoringServiceImpl) fetchEmailFromGoogleAPI(accessToken string) (string, error) {
 	const maxRetries = 3
-	const timeout = 10 * time.Second
+	const timeout = 5 * time.Minute
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		req, err := http.NewRequest("GET",
