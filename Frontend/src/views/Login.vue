@@ -1,256 +1,365 @@
 <template>
   <div class="login-container">
-    <form @submit.prevent="handleLogin" class="login-card">
-      <div class="form-header">
-        <h2>G-Backup</h2>
-        <p>Please sign in to continue</p>
+    <div class="login-card">
+      <div class="login-header">
+        <h1>G-Backup</h1>
+        <p>Masuk ke sistem backup</p>
       </div>
-      
-      <div class="form-group">
-        <label for="username">Username</label>
-        <input 
-          type="text" 
-          id="username" 
-          v-model="username" 
-          placeholder="Enter your username"
-          @input="clearError"
-        />
-      </div>
-      
-      <div class="form-group">
-        <label for="password">Password</label>
-        <input 
-          type="password" 
-          id="password" 
-          v-model="password" 
-          placeholder="Enter your password"
-          @input="clearError"
-        />
-      </div>
-      
-      <button type="submit" :disabled="isLoading" class="submit-btn">
-        <span v-if="isLoading">Loading...</span>
-        <span v-else>Sign In</span>
-      </button>
-      
-      <div v-if="errorMessage" class="error-alert">
-        {{ errorMessage }}
-      </div>
-    </form>
+
+      <!-- ⭐ Setup Complete Message -->
+      <Transition name="slide-fade">
+        <div v-if="showSetupMessage" class="setup-message">
+          <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p>Setup berhasil! Silakan login dengan akun yang telah dibuat</p>
+        </div>
+      </Transition>
+
+      <!-- ⭐ Logout Success Message -->
+      <Transition name="slide-fade">
+        <div v-if="showLogoutMessage" class="logout-message">
+          <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+          </svg>
+          <p>Anda telah keluar dari sistem</p>
+        </div>
+      </Transition>
+
+      <form @submit.prevent="handleLogin" class="login-form">
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input
+            type="text"
+            id="username"
+            v-model="username"
+            placeholder="Masukkan username"
+            required
+            :disabled="loading"
+            autocomplete="username"
+          >
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input
+            type="password"
+            id="password"
+            v-model="password"
+            placeholder="Masukkan password"
+            required
+            :disabled="loading"
+            autocomplete="current-password"
+          >
+        </div>
+
+        <div v-if="error" class="error-message">
+          {{ error }}
+        </div>
+
+        <button type="submit" :disabled="loading" class="btn-login">
+          <span v-if="loading" class="loading-spinner"></span>
+          {{ loading ? 'Memproses...' : 'Masuk' }}
+        </button>
+      </form>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { useAuthStore } from '@/stores/authStore' 
-import { useRouter } from 'vue-router'
-import authService from '@/services/authService'
+import { ref, onMounted } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
+import { useAuthStore } from '@/stores/authStore';
 
-// State
-const username = ref('') 
-const password = ref('') 
-const errorMessage = ref(null)
-const isLoading = ref(false)
+const router = useRouter();
+const route = useRoute();
+const authStore = useAuthStore();
 
-const authStore = useAuthStore()
-const router = useRouter()
+const username = ref('');
+const password = ref('');
+const error = ref(null);
+const loading = ref(false);
+const showLogoutMessage = ref(false);
+const showSetupMessage = ref(false);  // ⭐ Tambah ini
 
-function clearError() {
-  errorMessage.value = null
-}
-
-async function handleLogin() {
-  errorMessage.value = null
-  
-  // Validasi field kosong
-  if (!username.value.trim() && !password.value.trim()) {
-    errorMessage.value = 'Plese enter your username and password!'
-    return
+// ⭐ Cek jika user baru logout ATAU baru selesai setup
+onMounted(() => {
+  // Check setup complete
+  if (route.query.setup === 'complete') {
+    showSetupMessage.value = true;
+    router.replace({ path: '/login' });
+    setTimeout(() => {
+      showSetupMessage.value = false;
+    }, 5000);
   }
   
-  if (!username.value.trim()) {
-    errorMessage.value = 'Plese enter your username!'
-    return
+  // Check logout
+  if (route.query.logout === 'success') {
+    showLogoutMessage.value = true;
+    router.replace({ path: '/login' });
+    setTimeout(() => {
+      showLogoutMessage.value = false;
+    }, 4000);
   }
-  
-  if (!password.value.trim()) {
-    errorMessage.value = 'Plese enter your password!'
-    return
-  }
-  
-  isLoading.value = true
-  
+});
+
+const handleLogin = async () => {
+  error.value = null;
+  loading.value = true;
+
   try {
-    const response = await authService.login(username.value, password.value)
-    
-    const token = response.data.token
-    if (token) {
-      authStore.setToken(token)
-      router.push('/') 
+    const response = await fetch('/api/v1/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: username.value,
+        password: password.value
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Login gagal');
     }
-  } catch (error) {
-    // Cek response dari server untuk menentukan pesan error yang tepat
-    if (error.response) {
-      const status = error.response.status
-      const data = error.response.data
-      
-      // Jika backend mengirim pesan spesifik
-      if (data.message) {
-        if (data.message.includes('username') && data.message.includes('incorrect')) {
-          errorMessage.value = 'Wrong username! Please check your username.'
-        } else if (data.message.includes('password') && data.message.includes('incorrect')) {
-          errorMessage.value = 'Wrong password! Please check your password.'
-        } else if (data.message.includes('not found') || data.message.includes('does not exist')) {
-          errorMessage.value = 'Wrong username or password! Account not found.'
-        } else {
-          errorMessage.value = data.message
-        }
-      } 
-      // Jika backend mengirim field spesifik yang salah
-      else if (data.field) {
-        if (data.field === 'username') {
-          errorMessage.value = 'Wrong username! Please check your username.'
-        } else if (data.field === 'password') {
-          errorMessage.value = 'Wrong password! Please check your password.'
-        }
-      }
-      // Status code based error handling
-      else if (status === 401) {
-        errorMessage.value = 'Wrong username or password! Please try again.'
-      } else if (status === 404) {
-        errorMessage.value = 'Account not found in the database!'
-      } else {
-        errorMessage.value = 'Login failed. Please check your username and password.'
-      }
-    } else if (error.request) {
-      errorMessage.value = 'Could not connect to the server. Please check your internet connection.'
-    } else {
-      errorMessage.value = 'An error occurred. Please try again.'
-    }
+
+    // Simpan token
+    authStore.setToken(data.token);
+
+    console.log('✅ Login successful');
+
+    // Redirect ke halaman yang diminta atau dashboard
+    const redirectTo = route.query.redirect || '/dashboard';
+    router.push(redirectTo);
+
+  } catch (err) {
+    error.value = err.message;
+    console.error('❌ Login error:', err);
   } finally {
-    isLoading.value = false
+    loading.value = false;
   }
-}
+};
 </script>
 
 <style scoped>
-/* 1. Layout Utama (Agar di tengah) */
 .login-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
   min-height: 100vh;
-  width: 100%;
-  background-color: #f3f4f6;
-  padding: 20px;
-  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 1rem;
 }
 
-/* 2. Kartu Login (Kotak Putih) */
 .login-card {
-  width: 100%;
-  max-width: 400px;
-  background: #ffffff;
-  padding: 2.5rem;
+  background: white;
   border-radius: 12px;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  padding: 3rem 2.5rem;
+  width: 100%;
+  max-width: 440px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
 }
 
-/* 3. Header Teks */
-.form-header {
+.login-header {
   text-align: center;
-  margin-bottom: 2rem;
+  margin-bottom: 2.5rem;
 }
 
-.form-header h2 {
-  margin: 0 0 0.5rem 0;
-  color: #111827;
-  font-size: 1.75rem;
-  font-weight: 700;
-}
-
-.form-header p {
-  margin: 0;
-  color: #6b7280;
-  font-size: 0.95rem;
-}
-
-/* 4. Input Fields */
-.form-group {
-  margin-bottom: 1.5rem;
-}
-
-label {
-  display: block;
-  margin-bottom: 0.5rem;
+.login-header h1 {
+  font-size: 1.875rem;
   font-weight: 600;
-  color: #374151;
-  font-size: 0.9rem;
+  color: #1a1a1a;
+  margin: 0 0 0.75rem 0;
+  letter-spacing: -0.02em;
 }
 
-input {
-  width: 100%;
-  padding: 0.75rem 1rem;
-  border: 1px solid #d1d5db;
+.login-header p {
+  font-size: 0.9375rem;
+  color: #666;
+  margin: 0;
+}
+
+/* ⭐ Setup Complete Message */
+.setup-message {
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
   border-radius: 6px;
-  font-size: 1rem;
-  color: #1f2937;
-  background-color: #f9fafb;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.setup-message .icon {
+  width: 20px;
+  height: 20px;
+  color: #3b82f6;
+  flex-shrink: 0;
+}
+
+.setup-message p {
+  margin: 0;
+  color: #1e40af;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+/* ⭐ Logout Message */
+.logout-message {
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+  border-radius: 6px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.logout-message .icon {
+  width: 20px;
+  height: 20px;
+  color: #22c55e;
+  flex-shrink: 0;
+}
+
+.logout-message p {
+  margin: 0;
+  color: #166534;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+/* Transitions */
+.slide-fade-enter-active {
+  transition: all 0.3s ease-out;
+}
+
+.slide-fade-leave-active {
+  transition: all 0.3s ease-in;
+}
+
+.slide-fade-enter-from {
+  transform: translateY(-10px);
+  opacity: 0;
+}
+
+.slide-fade-leave-to {
+  transform: translateY(-10px);
+  opacity: 0;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-group label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #333;
+}
+
+.form-group input {
+  padding: 0.75rem 1rem;
+  font-size: 0.9375rem;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
   transition: all 0.2s;
-  box-sizing: border-box;
+  background: white;
 }
 
-input:focus {
+.form-group input:focus {
   outline: none;
-  border-color: #10b981;
-  background-color: #ffffff;
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
-/* 5. Tombol Submit */
-.submit-btn {
-  width: 100%;
-  padding: 0.875rem;
-  background-color: #10b981;
+.form-group input:disabled {
+  background: #f8f8f8;
+  cursor: not-allowed;
+  color: #999;
+}
+
+.form-group input::placeholder {
+  color: #999;
+}
+
+.error-message {
+  background: #fef2f2;
+  color: #dc2626;
+  padding: 0.875rem 1rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  border: 1px solid #fee2e2;
+  margin: 0;
+}
+
+.btn-login {
+  background: #1a1a1a;
   color: white;
   border: none;
+  padding: 0.875rem 1.5rem;
   border-radius: 6px;
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: 0.9375rem;
+  font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
 }
 
-.submit-btn:hover {
-  background-color: #059669;
+.btn-login:hover:not(:disabled) {
+  background: #333;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.submit-btn:disabled {
-  background-color: #9ca3af;
+.btn-login:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-login:disabled {
+  background: #e5e5e5;
+  color: #999;
   cursor: not-allowed;
 }
 
-/* 6. Pesan Error */
-.error-alert {
-  margin-top: 1.5rem;
-  padding: 0.75rem;
-  background-color: #fef2f2;
-  border: 1px solid #fecaca;
-  color: #991b1b;
-  border-radius: 6px;
-  text-align: center;
-  font-size: 0.9rem;
-  animation: slideDown 0.3s ease-out;
+.loading-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #fff;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
 }
 
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 480px) {
+  .login-card {
+    padding: 2rem 1.5rem;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+
+  .login-header h1 {
+    font-size: 1.5rem;
+  }
+
+  .login-header p {
+    font-size: 0.875rem;
   }
 }
 </style>

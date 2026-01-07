@@ -5,7 +5,7 @@ export const useAuthStore = defineStore('auth', () => {
     const token = ref(sessionStorage.getItem('token') || null)
 
     function isAuthenticated() {
-            return token.value !== null
+        return token.value !== null
     }
 
     function setToken(newToken) {
@@ -18,5 +18,18 @@ export const useAuthStore = defineStore('auth', () => {
         sessionStorage.removeItem('token')
     }
 
-    return {token, isAuthenticated, setToken, clearToken}
+    // ⭐ BARU: Logout function
+    function logout() {
+        token.value = null
+        sessionStorage.removeItem('token')
+        console.log('✅ User logged out')
+    }
+
+    return {
+        token, 
+        isAuthenticated, 
+        setToken, 
+        clearToken, 
+        logout  // ⭐ Export logout
+    }
 })

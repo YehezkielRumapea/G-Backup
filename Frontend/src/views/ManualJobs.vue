@@ -3,25 +3,9 @@
     <div class="header">
       <div>
         <h1>Manual Jobs</h1>
-        <p class="subtitle">Menjalankan Job Tanpa Jadwal yang telah disimpan</p>
-      </div>
+        <p class="subtitle">View and manage all manual backup jobs</p>
+      </div>  
     </div>
-    
-    <!-- Script Preview Modal -->
-    <ScriptPreview
-      :is-visible="isModalVisible"
-      :job-id="currentJobId"
-      :script-content="currentScript"
-      @close="closeModal"
-    />
-
-    <!-- ✅ Edit Job Modal -->
-    <EditJobModal 
-      :isVisible="showEditModal" 
-      :jobData="selectedJob"
-      @close="showEditModal = false"
-      @success="handleUpdateSuccess"
-    />
 
     <!-- Loading State -->
     <div v-if="isLoading" class="status-message">
@@ -36,73 +20,49 @@
     </div>
 
     <!-- Empty State -->
-    <div v-if="!isLoading && backupJobs.length === 0 && !errorMessage" class="empty-state">
-      <p>Tidak ada template job manual yang ditemukan</p>
+    <div v-if="!isLoading && jobs && jobs.length === 0 && !errorMessage" class="empty-state">
+      <p>Belum ada manual job yang terdaftar</p>
       <router-link to="/create" class="btn-create">
-        Buat Job Baru
+        Buat Manual Job
       </router-link>
     </div>
 
-    <!-- ✅ BACKUP JOBS SECTION -->
-    <div v-if="!isLoading && backupJobs.length > 0" class="table-container">
+    <!-- Jobs Table -->
+    <div v-if="!isLoading && jobs.length > 0" class="table-container">
       <table class="jobs-table">
         <thead>
           <tr>
             <th>Nama Job</th>
             <th>Object</th>
             <th>GDrive</th>
+            <th>Created At</th>
             <th>Last Run</th>
             <th>Status</th>
-            <th>Next Run</th>
             <th>Action</th>
           </tr>
         </thead>
         <tbody>
           <ManualJobRow
-            v-for="job in backupJobs"
+            v-for="job in jobs"
             :key="job.id"
             :job="job"
             @trigger="handleTrigger"
             @view-script="handleViewScript"
-            @edit="handleEdit"
-            @delete="handleDelete"
+            @delete="handleDeleteJob"
           />
         </tbody>
       </table>
     </div>
 
-    <!-- ✅ RESTORE JOBS SECTION -->
-    <div v-if="!isLoading && restoreJobs.length > 0" class="restore-section">
-      <h2 class="section-title">📥 Restore Jobs</h2>
-      <div class="table-container">
-        <table class="jobs-table">
-          <thead>
-            <tr>
-              <th>Nama Job</th>
-              <th>Object</th>
-              <th>GDrive</th>
-              <th>Last Run</th>
-              <th>Status</th>
-              <th>Next Run</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            <ManualJobRow
-              v-for="job in restoreJobs"
-              :key="job.id"
-              :job="job"
-              @trigger="handleTrigger"
-              @view-script="handleViewScript"
-              @edit="handleEdit"
-              @delete="handleDelete"
-            />
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <!-- Script Preview Modal -->
+    <ScriptPreview
+      :is-visible="isModalVisible"
+      :job-id="currentJobId"
+      :script-content="currentScript"
+      @close="closeModal"
+    />
 
-    <!-- ✅ Toast Notification -->
+    <!-- Toast Notification -->
     <Transition name="toast">
       <div
         v-if="toast.show"
@@ -127,11 +87,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted } from 'vue';
 import jobService from '@/services/jobService';
 import ManualJobRow from '@/components/ManualJobRow.vue';
 import ScriptPreview from '@/components/ScriptPreview.vue';
-import EditJobModal from '@/components/EditJobModal.vue';
 
 // State untuk jobs list
 const jobs = ref([]);
@@ -143,35 +102,22 @@ const isModalVisible = ref(false);
 const currentScript = ref('');
 const currentJobId = ref(null);
 
-// ✅ State untuk Edit Modal
-const selectedJob = ref(null);
-const showEditModal = ref(false);
-
-// State untuk Toast
+// Toast notification state
 const toast = ref({
   show: false,
   message: '',
-  type: 'success',
+  type: 'success', // 'success' | 'error' | 'info'
 });
 
-// ✅ Computed properties untuk filter BACKUP vs RESTORE
-const backupJobs = computed(() => {
-  return jobs.value.filter(job => job.operation_mode !== 'RESTORE');
-});
-
-const restoreJobs = computed(() => {
-  return jobs.value.filter(job => job.operation_mode === 'RESTORE');
-});
-
-// ✅ Fetch all jobs
+// Fetch manual jobs
 async function fetchData() {
   isLoading.value = true;
   errorMessage.value = null;
   
   try {
     const data = await jobService.getManualJobs();
-    jobs.value = data;
-    console.log('✅ Jobs loaded:', jobs.value.length);
+    jobs.value = Array.isArray(data) ? data : [];
+    console.log('✅ Manual jobs loaded:', jobs.value.length);
   } catch (error) {
     errorMessage.value = error.response?.data?.error || 'Gagal memuat data manual jobs.';
     console.error("Fetch Manual Jobs Error:", error);
@@ -180,56 +126,9 @@ async function fetchData() {
   }
 }
 
-// ✅ Handle Edit - Load job data terlebih dahulu
-async function handleEdit(jobId) {
-  console.log('✅ handleEdit dipanggil dengan jobId:', jobId);
-  
-  try {
-    showToast('Memuat data job...', 'info');
-    
-    // Fetch job data dari API
-    // Backend returns: { success: true, data: { id, job_name, ... } }
-    const response = await jobService.getJobById(jobId);
-    console.log('✅ Full response from API:', response);
-    
-    // ✅ Tidak perlu extract data di sini, biarkan EditJobModal yang handle
-    // EditJobModal akan menerima full response dan extract sendiri
-    selectedJob.value = response.data;
-    showEditModal.value = true;
-    
-    console.log('✅ Modal opened with data:', selectedJob.value);
-  } catch (error) {
-    console.error('❌ Error loading job:', error);
-    showToast('Gagal memuat data job untuk diedit', 'error');
-  }
-}
-
-// ✅ Handle Update Success
-function handleUpdateSuccess() {
-  console.log('✅ Job berhasil diupdate');
-  fetchData(); // Refresh job list
-  showToast('Job berhasil diperbarui!', 'success');
-}
-
-// ✅ Handle Delete
-async function handleDelete(jobId, jobName) {
-  if (!confirm(`Apakah Anda yakin ingin menghapus job "${jobName}"?`)) {
-    return;
-  }
-
-  try {
-    await jobService.deleteJob(jobId);
-    showToast('Job berhasil dihapus!', 'success');
-    fetchData(); // Refresh job list
-  } catch (error) {
-    const errorMsg = error.response?.data?.error || error.message || 'Gagal menghapus job';
-    showToast(errorMsg, 'error');
-  }
-}
-
-// ✅ Handle Trigger Manual Job
+// Handle Trigger Job
 async function handleTrigger(jobId) {
-  if (!confirm(`Apakah Anda yakin ingin menjalankan job manual ID ${jobId} sekarang?`)) {
+  if (!confirm(`Apakah Anda yakin ingin menjalankan job ID ${jobId} sekarang?`)) {
     return;
   }
   
@@ -247,7 +146,7 @@ async function handleTrigger(jobId) {
   }
 }
 
-// ✅ Handle View Script
+// Handle View Script
 async function handleViewScript(jobId) {
   try {
     isModalVisible.value = true;
@@ -263,6 +162,22 @@ async function handleViewScript(jobId) {
   }
 }
 
+// Handle Delete Job
+async function handleDeleteJob(jobId, jobName) {
+  if (!confirm(`Apakah Anda yakin ingin menghapus job "${jobName}"?`)) {
+    return;
+  }
+
+  try {
+    await jobService.deleteJob(jobId);
+    showToast('Job berhasil dihapus!', 'success');
+    fetchData(); // Refresh job list
+  } catch (error) {
+    const errorMsg = error.response?.data?.error || error.message || 'Gagal menghapus job';
+    showToast(errorMsg, 'error');
+  }
+}
+
 // Close Script Preview Modal
 function closeModal() {
   isModalVisible.value = false;
@@ -270,7 +185,7 @@ function closeModal() {
   currentJobId.value = null;
 }
 
-// ✅ Toast Notification Helper
+// Toast Notification Helper
 function showToast(message, type = 'success') {
   toast.value = { show: true, message, type };
   setTimeout(() => {
@@ -278,6 +193,7 @@ function showToast(message, type = 'success') {
   }, 3000);
 }
 
+// Get toast CSS class
 function getToastClass(type) {
   const classes = {
     success: 'toast-success',
@@ -308,7 +224,7 @@ onMounted(fetchData);
 
 h1 {
   font-size: 1.75rem;
-  font-weight: bold;
+  font-weight: 600;
   color: #1a1a1a;
   margin: 0 0 0.5rem 0;
   letter-spacing: -0.02em;
@@ -321,17 +237,22 @@ h1 {
   font-weight: 400;
 }
 
-.section-title {
-  font-size: 1.25rem;
-  font-weight: bold;
-  color: #1a1a1a;
-  margin: 2rem 0 1rem 0;
-  padding-top: 1.5rem;
-  border-top: 2px solid #e5e5e5;
+.btn-add {
+  display: inline-flex;
+  align-items: center;
+  background: #1a1a1a;
+  color: white;
+  padding: 0.625rem 1.125rem;
+  border-radius: 6px;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.9375rem;
+  transition: all 0.2s;
+  white-space: nowrap;
 }
 
-.restore-section {
-  margin-top: 2rem;
+.btn-add:hover {
+  background: #333;
 }
 
 .status-message {
@@ -545,11 +466,10 @@ h1 {
   
   h1 {
     font-size: 1.5rem;
-    font-weight: bold;
   }
   
-  .section-title {
-    font-size: 1.1rem;
+  .btn-add {
+    justify-content: center;
   }
   
   .table-container {

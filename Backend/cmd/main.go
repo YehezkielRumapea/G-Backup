@@ -1,4 +1,3 @@
-// cmd/main.go
 package main
 
 import (
@@ -73,9 +72,6 @@ func main() {
 	schedulerSvc := service.NewSchedulerService(jobRepo, backupSvc)
 	browserSvc := service.NewBrowserService(browserRepo)
 
-	// ✅ Remote Service - NO BASE_URL needed!
-	remoteSvc := service.NewAddRemoteService()
-
 	// Handlers
 	authHandler := handler.NewAuthHandler(authSvc)
 	monitorHandler := handler.NewMonitoringHandler(monitorSvc, schedulerSvc, logRepo)
@@ -84,7 +80,6 @@ func main() {
 	restoreHandler := handler.NewRestoreHandler(backupSvc)
 	browserHandler := handler.NewBrowserHandler(browserSvc)
 	setupHandler := handler.NewSetupHandler(authSvc)
-	remoteHandler := handler.NewAddRemoteHandler(remoteSvc)
 
 	// Echo Setup
 	e := echo.New()
@@ -101,7 +96,6 @@ func main() {
 
 	// Public Routes
 	e.POST("/api/v1/auth/login", authHandler.Login)
-	e.GET("/api/v1/remote/oauth-callback", remoteHandler.OAuthCallback)
 
 	setupGroup := e.Group("/api/v1/setup")
 	setupGroup.GET("/status", setupHandler.GetSetupStatus)
@@ -133,12 +127,6 @@ func main() {
 	r.GET("/browser/files", browserHandler.ListFiles)
 	r.GET("/browser/remotes", browserHandler.GetAvailableRemotes)
 	r.GET("/browser/info", browserHandler.GetFileInfo)
-
-	// ✅ Remote Management Routes
-	r.POST("/remote/init-auth", remoteHandler.InitAuth)
-	r.POST("/remote/finalize", remoteHandler.FinalizeConfig)
-	r.DELETE("/remote/:name", remoteHandler.DeleteRemote)
-	r.GET("/remote/list", remoteHandler.ListRemotes)
 
 	// Start Daemons
 	schedulerSvc.StartDaemon()
@@ -172,6 +160,5 @@ func main() {
 	}()
 
 	fmt.Println("\n✅ Backend diinisialisasi. Menjalankan Echo server di port 8080")
-	fmt.Println("📍 Remote OAuth: Dynamic redirect URI (no configuration needed)")
 	e.Logger.Fatal(e.Start(":8080"))
 }
