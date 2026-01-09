@@ -2,97 +2,126 @@
 
 set -e
 
-# Colors for clean output
+# ==============================
+# Terminal Colors
+# ==============================
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m'  # No Color
+NC='\033[0m'
 
 echo -e "${BLUE}"
 echo "┌──────────────────────────────────────────────┐"
-echo "│         Backup Server Installation          │"
+echo "│     Backup Management System Installer       │"
 echo "└──────────────────────────────────────────────┘"
 echo -e "${NC}"
 
-# Function to check and install dependency
+# ==============================
+# Dependency Installer
+# ==============================
 install_dep() {
-    local dep=$1
+    local bin=$1
     local pkg=${2:-$1}
-    
-    if ! command -v $dep &>/dev/null; then
-        echo -e "${YELLOW}Installing $dep...${NC}"
-        sudo apt update > /dev/null 2>&1
-        sudo apt install -y $pkg > /dev/null 2>&1
-        echo -e "${GREEN}✓ $dep installed${NC}"
+
+    if ! command -v "$bin" &>/dev/null; then
+        echo -e "${YELLOW}Installing dependency: $pkg...${NC}"
+        sudo apt update -qq
+        sudo apt install -y "$pkg" -qq
+        echo -e "${GREEN}✓ $pkg installed${NC}"
     else
-        echo -e "${GREEN}✓ $dep already installed${NC}"
+        echo -e "${GREEN}✓ $bin already available${NC}"
     fi
 }
 
-# Get server IP
+# ==============================
+# Network Utilities
+# ==============================
 get_ip() {
-    ip=$(hostname -I | awk '{print $1}')
-    [ -z "$ip" ] && ip=$(ip addr show | grep -oP 'inet \K[\d.]+' | grep -v 127.0.0.1 | head -n1)
-    echo $ip
+    hostname -I | awk '{print $1}'
 }
 
-echo -e "${BLUE}Checking dependencies...${NC}"
+find_available_port() {
+    local ports=(5173 3000 3001 8080)
+    for port in "${ports[@]}"; do
+        if ! lsof -Pi :"$port" -sTCP:LISTEN -t >/dev/null 2>&1; then
+            echo "$port"
+            return
+        fi
+    done
+    echo "5173"
+}
+
+# ==============================
+# Dependency Check
+# ==============================
+echo -e "${BLUE}Verifying system requirements...${NC}"
+
 install_dep "go" "golang-go"
 install_dep "node" "nodejs"
 install_dep "npm"
-install_dep "mysql" "mysql-client"
+install_dep "mysql" "default-mysql-client"
 
-# Install rclone
+# ==============================
+# Rclone Installation
+# ==============================
 if ! command -v rclone &>/dev/null; then
     echo -e "${YELLOW}Installing rclone...${NC}"
-    curl -s https://rclone.org/install.sh | sudo bash > /dev/null 2>&1
+    curl -fsSL https://rclone.org/install.sh | sudo bash > /dev/null
     echo -e "${GREEN}✓ rclone installed${NC}"
 else
-    echo -e "${GREEN}✓ rclone already installed${NC}"
+    echo -e "${GREEN}✓ rclone already available${NC}"
 fi
 
+# ==============================
+# Database Configuration
+# ==============================
 echo ""
 echo -e "${BLUE}Database Configuration${NC}"
 echo ""
 
-read -p "MySQL Username: " db_user
-db_user=${db_user:-gbackup}
+read -p "Database user [root]: " db_user
+db_user=${db_user:-root}
 
-read -sp "MySQL Password: " db_pass
-db_pass=${db_pass:-gbackup}
+read -sp "Database password: " db_pass
 echo ""
 
-read -p "Host: " db_host
-db_host=${db_host:-localhost}
+read -p "Database host [127.0.0.1]: " db_host
+db_host=${db_host:-127.0.0.1}
 
-read -p "Port: " db_port
+read -p "Database port [3306]: " db_port
 db_port=${db_port:-3306}
 
-read -p "Database: " db_name
+read -p "Database name [gbackup_db]: " db_name
 db_name=${db_name:-gbackup_db}
 
+# ==============================
+# Storage Configuration
+# ==============================
 echo ""
-echo -e "${BLUE}Rclone Configuration${NC}"
+echo -e "${BLUE} Rclone Configuration${NC}"
 echo ""
-read -p "Rclone config path [~/.config/rclone/rclone.conf]: " rclone_path
+
+read -p "Rclone config file path [~/.config/rclone/rclone.conf]: " rclone_path
 rclone_path=${rclone_path:-$HOME/.config/rclone/rclone.conf}
 
+# ==============================
+# Service Configuration
+# ==============================
 echo ""
-echo -e "${BLUE}Network Configuration${NC}"
+echo -e "${BLUE}Service Configuration${NC}"
 echo ""
-read -p "Backend port [8080]: " backend_port
-backend_port=${backend_port:-8080}
 
-read -p "Frontend port [3000]: " frontend_port
-frontend_port=${frontend_port:-3000}
-
-# Generate JWT
+APP_PORT=$(find_available_port)
 jwt_secret=$(openssl rand -base64 32)
 
-echo ""
-echo -e "${BLUE}Creating configuration...${NC}"
+echo -e "${GREEN}✓ Application port selected: ${APP_PORT}${NC}"
 
-# Create .env
+# ==============================
+# Environment Setup
+# ==============================
+echo ""
+echo -e "${BLUE}Generating system configuration...${NC}"
+
 cat > Backend/.env << EOF
 DB_USER=$db_user
 DB_PASS=$db_pass
@@ -102,36 +131,47 @@ DB_NAME=$db_name
 JWT_SECRET_KEY=$jwt_secret
 RCLONE_CONFIG=$rclone_path
 SERVER_HOST=0.0.0.0
-BACKEND_PORT=$backend_port
-FRONTEND_PORT=$frontend_port
+APP_PORT=$APP_PORT
 EOF
 
-echo -e "${GREEN}✓ Configuration file created${NC}"
+echo -e "${GREEN}✓ Configuration created${NC}"
 
-# Build backend
-echo -e "${BLUE}Building backend...${NC}"
+# ==============================
+# Build Core Service
+# ==============================
+echo -e "${BLUE}Compiling application service...${NC}"
 cd Backend
 go mod download
-go build -o cmd/backend_app ./cmd
+go build -o app ./cmd/backend_app
 cd ..
-echo -e "${GREEN}✓ Backend compiled${NC}"
+echo -e "${GREEN}✓ Application compiled${NC}"
 
-# Install frontend
+# ==============================
+# Install Web Interface
+# ==============================
 if [ -d "Frontend" ] && [ -f "Frontend/package.json" ]; then
-    echo -e "${BLUE}Installing frontend...${NC}"
+    echo -e "${BLUE}Preparing web interface...${NC}"
     cd Frontend
     npm install --silent
     cd ..
-    echo -e "${GREEN}✓ Frontend dependencies installed${NC}"
+    echo -e "${GREEN}✓ Web interface ready${NC}"
 fi
+
+# ==============================
+# Completion Summary
+# ==============================
+SERVER_IP=$(get_ip)
 
 echo ""
 echo -e "${BLUE}┌──────────────────────────────────────────────┐"
-echo -e "│           Installation Complete              │"
+echo -e "│          Installation Completed              │"
 echo -e "└──────────────────────────────────────────────┘${NC}"
 echo ""
-echo -e "${GREEN}Server is ready to run.${NC}"
+echo -e "${GREEN}System successfully installed.${NC}"
 echo ""
-echo "To start the server:"
-echo -e "  ${BLUE}./start.sh${NC}"
+echo -e "${YELLOW}Access URL:${NC}"
+echo -e "  http://${SERVER_IP}:${APP_PORT}"
+echo ""
+echo -e "${BLUE}To start the system:${NC}"
+echo "  ./start.sh"
 echo ""
