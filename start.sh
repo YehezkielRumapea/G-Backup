@@ -91,12 +91,21 @@ if check_rebuild; then
     cd Backend
     
     # Ensure dependencies are up to date
-    go mod download > /dev/null 2>&1
+    if ! go mod download 2>&1 | tee /tmp/go_download.log; then
+        echo -e "${RED}✗ Failed to download dependencies${NC}"
+        if [ -f "app.backup" ]; then
+            mv app.backup app
+        fi
+        cd ..
+        exit 1
+    fi
+    
     go mod tidy > /dev/null 2>&1
     
     # Build with proper path
-    if go build -o app ./cmd/main.go 2>&1 | grep -q "error"; then
+    if ! go build -o app ./cmd/main.go 2>&1 | tee /tmp/go_build.log; then
         echo -e "${RED}✗ Build failed${NC}"
+        echo -e "${YELLOW}Check /tmp/go_build.log for details${NC}"
         # Restore backup if exists
         if [ -f "app.backup" ]; then
             mv app.backup app
@@ -118,9 +127,16 @@ if [ -d "Frontend" ] && [ -f "Frontend/package.json" ]; then
     if [ ! -d "Frontend/node_modules" ] || [ "Frontend/package.json" -nt "Frontend/node_modules" ]; then
         echo -e "${BLUE}Installing frontend dependencies...${NC}"
         cd Frontend
-        npm install --silent > /dev/null 2>&1
+        
+        if npm install 2>&1; then
+            echo -e "${GREEN}✓ Frontend ready${NC}"
+        else
+            echo -e "${RED}✗ Frontend installation failed${NC}"
+            cd ..
+            exit 1
+        fi
+        
         cd ..
-        echo -e "${GREEN}✓ Frontend ready${NC}"
     fi
 fi
 

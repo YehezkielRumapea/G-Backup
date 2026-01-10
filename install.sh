@@ -275,12 +275,23 @@ echo -e "\n${BLUE}Building application...${NC}"
 cd Backend
 
 # Ensure dependencies are downloaded
-go mod download > /dev/null 2>&1
+echo -e "${YELLOW}Downloading dependencies...${NC}"
+if ! go mod download 2>&1 | tee /tmp/go_download.log; then
+    echo -e "${RED}✗ Failed to download dependencies${NC}"
+    cat /tmp/go_download.log
+    cd ..
+    exit 1
+fi
+
 go mod tidy > /dev/null 2>&1
 
 # Build the application
-if go build -o app ./cmd/main.go 2>&1 | grep -q "error"; then
+echo -e "${YELLOW}Compiling...${NC}"
+if ! go build -o app ./cmd/main.go 2>&1 | tee /tmp/go_build.log; then
     echo -e "${RED}✗ Build failed${NC}"
+    echo -e "${YELLOW}Error details:${NC}"
+    cat /tmp/go_build.log
+    cd ..
     exit 1
 fi
 
@@ -293,9 +304,17 @@ cd ..
 if [ -d "Frontend" ] && [ -f "Frontend/package.json" ]; then
     echo -e "${BLUE}Installing frontend...${NC}"
     cd Frontend
-    npm install --silent > /dev/null 2>&1
+    
+    # Run npm install with visible output
+    if npm install 2>&1; then
+        echo -e "${GREEN}✓ Frontend ready${NC}"
+    else
+        echo -e "${RED}✗ Frontend installation failed${NC}"
+        cd ..
+        exit 1
+    fi
+    
     cd ..
-    echo -e "${GREEN}✓ Frontend ready${NC}"
 fi
 
 # ============================================
