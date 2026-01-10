@@ -265,7 +265,7 @@ SERVER_HOST=0.0.0.0
 APP_PORT=$APP_PORT
 EOF
 
-echo -e "${GREEN}✓ Configuration file created${NC}"
+echo -e "${GREEN}✓ Configuration created${NC}"
 
 # ============================================
 # Build Backend Application
@@ -275,64 +275,37 @@ echo -e "\n${BLUE}Building application...${NC}"
 cd Backend
 
 # Ensure dependencies are downloaded
-echo -e "${YELLOW}Downloading Go dependencies...${NC}"
-go mod download
-go mod tidy
+go mod download > /dev/null 2>&1
+go mod tidy > /dev/null 2>&1
 
 # Build the application
-echo -e "${YELLOW}Compiling backend...${NC}"
-if go build -o app ./cmd/main.go; then
-    echo -e "${GREEN}✓ Application compiled successfully${NC}"
-else
+if go build -o app ./cmd/main.go 2>&1 | grep -q "error"; then
     echo -e "${RED}✗ Build failed${NC}"
     exit 1
 fi
 
+echo -e "${GREEN}✓ Application built${NC}"
 cd ..
 
 # ============================================
 # Install Frontend (if exists)
 # ============================================
 if [ -d "Frontend" ] && [ -f "Frontend/package.json" ]; then
-    echo -e "\n${BLUE}Preparing web interface...${NC}"
+    echo -e "${BLUE}Installing frontend...${NC}"
     cd Frontend
-    npm install --silent
+    npm install --silent > /dev/null 2>&1
     cd ..
-    echo -e "${GREEN}✓ Web interface ready${NC}"
+    echo -e "${GREEN}✓ Frontend ready${NC}"
 fi
 
 # ============================================
 # Installation Complete
 # ============================================
 SERVER_IP=$(hostname -I | awk '{print $1}')
-[ -z "$SERVER_IP" ] && SERVER_IP="127.0.0.1"
+[ -z "$SERVER_IP" ] && SERVER_IP=$(ip route get 1 | awk '{print $(NF-2);exit}')
 
-echo -e "\n${BLUE}┌──────────────────────────────────────────────┐"
-echo -e "│           Installation Complete             │"
-echo -e "└──────────────────────────────────────────────┘${NC}"
+echo -e "\n${GREEN}✓ System successfully installed${NC}"
 echo ""
-echo -e "${GREEN}✓ System successfully installed${NC}"
-echo ""
-echo -e "${YELLOW}Configuration Summary${NC}"
-echo "  Database: $DB_NAME"
-echo "  MySQL User: $DB_USER"
-echo "  Server: $SERVER_IP:$APP_PORT"
-echo ""
-echo -e "${YELLOW}Access URL${NC}"
-echo "  Backend API: http://$SERVER_IP:$APP_PORT"
-echo ""
-echo -e "${YELLOW}MySQL Access${NC}"
-echo "  To access your MySQL database:"
-echo "  mysql -u $DB_USER -p"
-echo ""
-echo -e "${YELLOW}Important Files${NC}"
-echo "  Config: Backend/.env"
-echo "  Binary: Backend/app"
-echo ""
-echo -e "${YELLOW}Database Setup${NC}"
-echo "  Apply schema manually with:"
-echo "  mysql -u $DB_USER -p $DB_NAME < Backend/internal/models/Db_scheme.sql"
-echo ""
-echo -e "${BLUE}Start the system with:${NC}"
-echo "  ./start.sh"
+echo -e "${BLUE}Access URL:${NC}"
+echo "  http://$SERVER_IP:$APP_PORT"
 echo ""

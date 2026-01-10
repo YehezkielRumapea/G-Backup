@@ -27,9 +27,9 @@ fi
 # Load configuration
 source <(grep -v '^#' Backend/.env | sed 's/^/export /')
 
-# Get server IP
+# Get server IP (accessible from network)
 SERVER_IP=$(hostname -I | awk '{print $1}')
-[ -z "$SERVER_IP" ] && SERVER_IP="127.0.0.1"
+[ -z "$SERVER_IP" ] && SERVER_IP=$(ip route get 1 | awk '{print $(NF-2);exit}')
 
 # ============================================
 # Auto-Detect Changes & Build
@@ -38,8 +38,6 @@ echo -e "${BLUE}Checking system status...${NC}"
 
 # Function to check if rebuild is needed
 check_rebuild() {
-    local rebuild_needed=1
-    
     # Check if binary exists
     if [ ! -f "Backend/app" ]; then
         echo -e "${YELLOW}Binary not found, need to build${NC}"
@@ -51,10 +49,9 @@ check_rebuild() {
     
     # Check Go files for changes
     local go_files_changed=0
-    for go_file in $(find Backend -name "*.go" -type f); do
+    for go_file in $(find Backend -name "*.go" -type f 2>/dev/null); do
         local file_mtime=$(stat -c %Y "$go_file" 2>/dev/null)
         if [ $file_mtime -gt $binary_mtime ]; then
-            echo -e "${YELLOW}Go file changed: $(basename "$go_file")${NC}"
             go_files_changed=1
             break
         fi
@@ -64,204 +61,174 @@ check_rebuild() {
         return 0
     fi
     
-    # Check go.mod
+    # Check go.mod/go.sum
     if [ -f "Backend/go.mod" ] && [ "Backend/go.mod" -nt "Backend/app" ]; then
-        echo -e "${YELLOW}Dependencies changed${NC}"
+        return 0
+    fi
+    
+    if [ -f "Backend/go.sum" ] && [ "Backend/go.sum" -nt "Backend/app" ]; then
         return 0
     fi
     
     # Check .env file
     if [ "Backend/.env" -nt "Backend/app" ]; then
-        echo -e "${YELLOW}Configuration changed${NC}"
         return 0
     fi
     
-    echo -e "${GREEN}✓ Code is up to date${NC}"
     return 1
 }
 
 # Check if rebuild is needed
 if check_rebuild; then
-    echo -e "\n${BLUE}Building application...${NC}"
+    echo -e "${BLUE}Building...${NC}"
     
     # Backup current binary if exists
     if [ -f "Backend/app" ]; then
-        echo -e "${YELLOW}Backing up current binary...${NC}"
         cp Backend/app Backend/app.backup 2>/dev/null || true
     fi
     
     # Build the application
     cd Backend
-    if go build -o app ./cmd/backend_app; then
-        echo -e "${GREEN}✓ Build successful${NC}"
-        # Remove backup if build succeeded
-        rm -f app.backup 2>/dev/null
-    else
+    
+    # Ensure dependencies are up to date
+    go mod download > /dev/null 2>&1
+    go mod tidy > /dev/null 2>&1
+    
+    # Build with proper path
+    if go build -o app ./cmd/main.go 2>&1 | grep -q "error"; then
         echo -e "${RED}✗ Build failed${NC}"
         # Restore backup if exists
         if [ -f "app.backup" ]; then
-            echo -e "${YELLOW}Restoring previous version...${NC}"
             mv app.backup app
         fi
+        cd ..
         exit 1
     fi
+    
+    rm -f app.backup 2>/dev/null
+    echo -e "${GREEN}✓ Built${NC}"
     cd ..
-else
-    echo -e "${GREEN}✓ No rebuild needed${NC}"
 fi
 
 # ============================================
 # Frontend Dependency Check
 # ============================================
 if [ -d "Frontend" ] && [ -f "Frontend/package.json" ]; then
-    echo -e "\n${BLUE}Checking frontend...${NC}"
-    
     # Check if node_modules exists or package.json is newer
     if [ ! -d "Frontend/node_modules" ] || [ "Frontend/package.json" -nt "Frontend/node_modules" ]; then
-        echo -e "${YELLOW}Installing/updating frontend dependencies...${NC}"
+        echo -e "${BLUE}Installing frontend dependencies...${NC}"
         cd Frontend
-        npm install --silent
+        npm install --silent > /dev/null 2>&1
         cd ..
-        echo -e "${GREEN}✓ Frontend dependencies updated${NC}"
-    else
-        echo -e "${GREEN}✓ Frontend dependencies are current${NC}"
+        echo -e "${GREEN}✓ Frontend ready${NC}"
     fi
+fi
+
+# ============================================
+# Database Connection Test
+# ============================================
+if ! mysql -u "$DB_USER" -p"$DB_PASS" -D "$DB_NAME" -e "SELECT 1;" 2>/dev/null; then
+    echo -e "${RED}✗ Database connection failed${NC}"
+    exit 1
 fi
 
 # ============================================
 # Service Startup
 # ============================================
 cleanup() {
-    echo -e "\n${YELLOW}Shutting down services...${NC}"
+    echo ""
     
     # Kill backend if running
     if [ ! -z "$BACKEND_PID" ] && kill -0 $BACKEND_PID 2>/dev/null; then
         kill $BACKEND_PID
-        echo -e "${GREEN}✓ Backend stopped${NC}"
+        wait $BACKEND_PID 2>/dev/null
     fi
     
     # Kill frontend if running
     if [ ! -z "$FRONTEND_PID" ] && kill -0 $FRONTEND_PID 2>/dev/null; then
         kill $FRONTEND_PID
-        echo -e "${GREEN}✓ Frontend stopped${NC}"
+        wait $FRONTEND_PID 2>/dev/null
     fi
     
     exit 0
 }
 
-trap cleanup SIGINT SIGTERM
+trap cleanup SIGINT SIGTERM EXIT
 
 # Start Backend
-echo -e "\n${BLUE}Starting backend service...${NC}"
 cd Backend
-./app &
+./app > backend.log 2>&1 &
 BACKEND_PID=$!
 cd ..
 
-# Wait a moment for backend to start
-sleep 2
+# Wait for backend to start
+sleep 3
 
 # Verify backend is running
-if ps -p $BACKEND_PID > /dev/null; then
-    echo -e "${GREEN}✓ Backend running (PID: $BACKEND_PID)${NC}"
-else
+if ! ps -p $BACKEND_PID > /dev/null; then
     echo -e "${RED}✗ Backend failed to start${NC}"
     exit 1
 fi
 
 # Start Frontend if exists
+FRONTEND_PID=""
+FRONTEND_PORT=""
+
 if [ -d "Frontend" ] && [ -f "Frontend/package.json" ]; then
-    echo -e "\n${BLUE}Starting frontend service...${NC}"
-    
-    # Find available port
-    FRONTEND_PORT=""
-    for port in $(seq $APP_PORT $((APP_PORT + 5))); do
+    # Find available port (start from APP_PORT + 1)
+    for port in $(seq $((APP_PORT + 1)) $((APP_PORT + 10))); do
         if ! lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1; then
             FRONTEND_PORT=$port
             break
         fi
     done
     
-    FRONTEND_PORT=${FRONTEND_PORT:-$((APP_PORT + 1))}
+    if [ -z "$FRONTEND_PORT" ]; then
+        FRONTEND_PORT=$((APP_PORT + 1))
+    fi
     
     cd Frontend
     
     # Check for development script
     if grep -q '"dev"' package.json; then
         npm run dev -- --host 0.0.0.0 --port $FRONTEND_PORT > frontend.log 2>&1 &
-    else
-        # Try to serve static files if dist exists
-        if [ -d "dist" ]; then
-            npx serve -s dist -l $FRONTEND_PORT > frontend.log 2>&1 &
-        else
-            echo -e "${YELLOW}⚠ No start method found for frontend${NC}"
-            FRONTEND_PID=""
-        fi
+        FRONTEND_PID=$!
+    elif grep -q '"start"' package.json; then
+        PORT=$FRONTEND_PORT npm start > frontend.log 2>&1 &
+        FRONTEND_PID=$!
     fi
     
-    FRONTEND_PID=$!
     cd ..
-    
-    sleep 3
-    
-    if [ ! -z "$FRONTEND_PID" ] && ps -p $FRONTEND_PID > /dev/null; then
-        echo -e "${GREEN}✓ Frontend running on port $FRONTEND_PORT${NC}"
-    fi
+    sleep 2
 fi
 
 # ============================================
 # Display System Information
 # ============================================
-echo -e "\n${BLUE}══════════════════════════════════════════════${NC}"
-echo -e "${GREEN}          System Started Successfully        ${NC}"
-echo -e "${BLUE}══════════════════════════════════════════════${NC}"
 echo ""
-echo -e "${YELLOW}Server:${NC} $SERVER_IP"
+echo -e "${GREEN}✓ System started successfully${NC}"
 echo ""
-echo -e "${GREEN}Backend API${NC}"
-echo -e "  http://$SERVER_IP:$APP_PORT"
-echo ""
+echo -e "${BLUE}Backend:${NC} http://$SERVER_IP:$APP_PORT"
 
 if [ ! -z "$FRONTEND_PORT" ] && [ ! -z "$FRONTEND_PID" ]; then
-    echo -e "${GREEN}Frontend Interface${NC}"
-    echo -e "  http://$SERVER_IP:$FRONTEND_PORT"
-    echo ""
+    echo -e "${BLUE}Frontend:${NC} http://$SERVER_IP:$FRONTEND_PORT"
 fi
 
-echo -e "${YELLOW}Process Information${NC}"
-echo -e "  Backend PID: $BACKEND_PID"
-[ ! -z "$FRONTEND_PID" ] && echo -e "  Frontend PID: $FRONTEND_PID"
 echo ""
-echo -e "${BLUE}══════════════════════════════════════════════${NC}"
-echo -e "${YELLOW}Press Ctrl+C to stop all services${NC}"
+echo -e "${YELLOW}Press Ctrl+C to stop${NC}"
 echo ""
 
 # ============================================
-# Health Monitoring
+# Keep running
 # ============================================
-echo -e "${BLUE}Monitoring services...${NC}"
-
 while true; do
+    sleep 10
+    
     # Check backend health
     if ! ps -p $BACKEND_PID > /dev/null; then
-        echo -e "\n${RED}Backend process has stopped${NC}"
+        echo -e "\n${RED}✗ Backend stopped${NC}"
         break
     fi
-    
-    # Check frontend health if running
-    if [ ! -z "$FRONTEND_PID" ] && ! ps -p $FRONTEND_PID > /dev/null; then
-        echo -e "\n${YELLOW}Frontend process has stopped${NC}"
-        FRONTEND_PID=""
-    fi
-    
-    # Check service health via API (optional)
-    if curl -s http://localhost:$APP_PORT/health > /dev/null 2>&1; then
-        echo -n "."
-    else
-        echo -e "\n${YELLOW}API health check failed${NC}"
-    fi
-    
-    sleep 10
 done
 
 cleanup
