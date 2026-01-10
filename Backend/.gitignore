@@ -3,4 +3,3 @@
 *.test
 vendor/
 .env
-backend_app

@@ -273,11 +273,22 @@ echo -e "${GREEN}✓ Configuration file created${NC}"
 echo -e "\n${BLUE}Building application...${NC}"
 
 cd Backend
-go mod download
-go build -o app ./cmd/backend_app
-cd ..
 
-echo -e "${GREEN}✓ Application compiled${NC}"
+# Ensure dependencies are downloaded
+echo -e "${YELLOW}Downloading Go dependencies...${NC}"
+go mod download
+go mod tidy
+
+# Build the application
+echo -e "${YELLOW}Compiling backend...${NC}"
+if go build -o app ./cmd/main.go; then
+    echo -e "${GREEN}✓ Application compiled successfully${NC}"
+else
+    echo -e "${RED}✗ Build failed${NC}"
+    exit 1
+fi
+
+cd ..
 
 # ============================================
 # Install Frontend (if exists)
@@ -294,6 +305,7 @@ fi
 # Installation Complete
 # ============================================
 SERVER_IP=$(hostname -I | awk '{print $1}')
+[ -z "$SERVER_IP" ] && SERVER_IP="127.0.0.1"
 
 echo -e "\n${BLUE}┌──────────────────────────────────────────────┐"
 echo -e "│           Installation Complete             │"
@@ -307,11 +319,19 @@ echo "  MySQL User: $DB_USER"
 echo "  Server: $SERVER_IP:$APP_PORT"
 echo ""
 echo -e "${YELLOW}Access URL${NC}"
-echo "  http://$SERVER_IP:$APP_PORT"
+echo "  Backend API: http://$SERVER_IP:$APP_PORT"
 echo ""
 echo -e "${YELLOW}MySQL Access${NC}"
 echo "  To access your MySQL database:"
 echo "  mysql -u $DB_USER -p"
+echo ""
+echo -e "${YELLOW}Important Files${NC}"
+echo "  Config: Backend/.env"
+echo "  Binary: Backend/app"
+echo ""
+echo -e "${YELLOW}Database Setup${NC}"
+echo "  Apply schema manually with:"
+echo "  mysql -u $DB_USER -p $DB_NAME < Backend/internal/models/Db_scheme.sql"
 echo ""
 echo -e "${BLUE}Start the system with:${NC}"
 echo "  ./start.sh"
