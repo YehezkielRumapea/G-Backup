@@ -33,7 +33,29 @@ install_dep() {
 
 install_dep "go" "golang-go"
 install_dep "node" "nodejs"
-install_dep "npm"
+
+# NPM needs special handling - check if it actually works
+echo -n "Checking npm... "
+if command -v npm &>/dev/null && npm --version &>/dev/null; then
+    NPM_VERSION=$(npm --version 2>/dev/null)
+    echo -e "${GREEN}✓ npm v${NPM_VERSION}${NC}"
+else
+    echo -e "${YELLOW}not found/broken${NC}"
+    echo -e "${YELLOW}Installing npm...${NC}"
+    sudo apt update -qq
+    sudo apt install -y npm nodejs -qq
+    
+    # Verify installation
+    if npm --version &>/dev/null; then
+        NPM_VERSION=$(npm --version 2>/dev/null)
+        echo -e "${GREEN}✓ npm v${NPM_VERSION} installed${NC}"
+    else
+        echo -e "${RED}✗ npm installation failed${NC}"
+        echo -e "${YELLOW}Try manually: sudo apt install nodejs npm${NC}"
+        exit 1
+    fi
+fi
+
 install_dep "mysql" "default-mysql-client"
 
 # Rclone
@@ -303,10 +325,26 @@ cd ..
 # ============================================
 if [ -d "Frontend" ] && [ -f "Frontend/package.json" ]; then
     echo -e "${BLUE}Installing frontend...${NC}"
+    
+    # Double-check npm is actually working
+    if ! npm --version &>/dev/null; then
+        echo -e "${RED}✗ npm is not working${NC}"
+        echo -e "${YELLOW}Installing npm...${NC}"
+        sudo apt update -qq
+        sudo apt install -y npm nodejs -qq
+        
+        # Final check
+        if ! npm --version &>/dev/null; then
+            echo -e "${RED}✗ Failed to install npm${NC}"
+            echo -e "${YELLOW}Run manually: sudo apt install nodejs npm${NC}"
+            exit 1
+        fi
+    fi
+    
     cd Frontend
     
     # Run npm install with visible output
-    if npm install 2>&1; then
+    if npm install; then
         echo -e "${GREEN}✓ Frontend ready${NC}"
     else
         echo -e "${RED}✗ Frontend installation failed${NC}"
