@@ -20,11 +20,27 @@ echo -e "${NC}"
 # ============================================
 echo -e "${BLUE}System Dependencies Check${NC}"
 
+# Progress bar function
+show_progress() {
+    local duration=$1
+    local message=$2
+    local steps=20
+    local step_duration=$(echo "scale=2; $duration / $steps" | bc)
+    
+    echo -n "$message "
+    for i in $(seq 1 $steps); do
+        echo -n "▓"
+        sleep $step_duration
+    done
+    echo " Done"
+}
+
 install_dep() {
     if ! command -v $1 &>/dev/null; then
         echo -e "${YELLOW}Installing $1...${NC}"
-        sudo apt update -qq
-        sudo apt install -y $2 -qq
+        (sudo apt update -qq && sudo apt install -y $2 -qq) &
+        show_progress 2 "Downloading"
+        wait
         echo -e "${GREEN}✓ $1 installed${NC}"
     else
         echo -e "${GREEN}✓ $1 available${NC}"
@@ -42,8 +58,9 @@ if command -v npm &>/dev/null && npm --version &>/dev/null; then
 else
     echo -e "${YELLOW}not found/broken${NC}"
     echo -e "${YELLOW}Installing npm...${NC}"
-    sudo apt update -qq
-    sudo apt install -y npm nodejs -qq
+    (sudo apt update -qq && sudo apt install -y npm nodejs -qq) &
+    show_progress 3 "Downloading"
+    wait
     
     # Verify installation
     if npm --version &>/dev/null; then
@@ -61,7 +78,9 @@ install_dep "mysql" "default-mysql-client"
 # Rclone
 if ! command -v rclone &>/dev/null; then
     echo -e "${YELLOW}Installing rclone...${NC}"
-    curl -fsSL https://rclone.org/install.sh | sudo bash > /dev/null
+    (curl -fsSL https://rclone.org/install.sh | sudo bash > /dev/null 2>&1) &
+    show_progress 4 "Downloading"
+    wait
     echo -e "${GREEN}✓ rclone installed${NC}"
 else
     echo -e "${GREEN}✓ rclone available${NC}"
@@ -235,8 +254,18 @@ fi
 # ============================================
 echo -e "\n${BLUE}Storage Configuration${NC}"
 
-read -p "Rclone config path [~/.config/rclone/rclone.conf]: " RCLONE_PATH
-RCLONE_PATH=${RCLONE_PATH:-$HOME/.config/rclone/rclone.conf}
+# Auto-detect rclone config path based on current user
+CURRENT_USER=$(whoami)
+RCLONE_PATH="/home/$CURRENT_USER/.config/rclone/rclone.conf"
+
+# Create rclone config directory if not exists
+RCLONE_DIR=$(dirname "$RCLONE_PATH")
+if [ ! -d "$RCLONE_DIR" ]; then
+    mkdir -p "$RCLONE_DIR"
+    echo -e "${YELLOW}Created rclone config directory${NC}"
+fi
+
+echo -e "${GREEN}✓ Rclone path: $RCLONE_PATH${NC}"
 
 # ============================================
 # Service Port Configuration
@@ -297,25 +326,43 @@ echo -e "\n${BLUE}Building application...${NC}"
 cd Backend
 
 # Ensure dependencies are downloaded
-echo -e "${YELLOW}Downloading dependencies...${NC}"
-if ! go mod download 2>&1 | tee /tmp/go_download.log; then
+echo -n "Downloading dependencies... "
+(go mod download 2>&1 > /tmp/go_download.log) &
+pid=$!
+while kill -0 $pid 2>/dev/null; do
+    echo -n "▓"
+    sleep 0.3
+done
+wait $pid
+if [ $? -ne 0 ]; then
+    echo ""
     echo -e "${RED}✗ Failed to download dependencies${NC}"
     cat /tmp/go_download.log
     cd ..
     exit 1
 fi
+echo " Done"
 
 go mod tidy > /dev/null 2>&1
 
 # Build the application
-echo -e "${YELLOW}Compiling...${NC}"
-if ! go build -o app ./cmd/main.go 2>&1 | tee /tmp/go_build.log; then
+echo -n "Compiling... "
+(go build -o app ./cmd/main.go 2>&1 > /tmp/go_build.log) &
+pid=$!
+while kill -0 $pid 2>/dev/null; do
+    echo -n "▓"
+    sleep 0.2
+done
+wait $pid
+if [ $? -ne 0 ]; then
+    echo ""
     echo -e "${RED}✗ Build failed${NC}"
     echo -e "${YELLOW}Error details:${NC}"
     cat /tmp/go_build.log
     cd ..
     exit 1
 fi
+echo " Done"
 
 echo -e "${GREEN}✓ Application built${NC}"
 cd ..
@@ -330,8 +377,9 @@ if [ -d "Frontend" ] && [ -f "Frontend/package.json" ]; then
     if ! npm --version &>/dev/null; then
         echo -e "${RED}✗ npm is not working${NC}"
         echo -e "${YELLOW}Installing npm...${NC}"
-        sudo apt update -qq
-        sudo apt install -y npm nodejs -qq
+        (sudo apt update -qq && sudo apt install -y npm nodejs -qq) &
+        show_progress 3 "Downloading"
+        wait
         
         # Final check
         if ! npm --version &>/dev/null; then
@@ -343,26 +391,118 @@ if [ -d "Frontend" ] && [ -f "Frontend/package.json" ]; then
     
     cd Frontend
     
-    # Run npm install with visible output
-    if npm install; then
-        echo -e "${GREEN}✓ Frontend ready${NC}"
-    else
+    # Run npm install with progress
+    echo -n "Installing packages... "
+    (npm install --silent 2>&1 > /tmp/npm_install.log) &
+    pid=$!
+    while kill -0 $pid 2>/dev/null; do
+        echo -n "▓"
+        sleep 0.5
+    done
+    wait $pid
+    if [ $? -ne 0 ]; then
+        echo ""
         echo -e "${RED}✗ Frontend installation failed${NC}"
+        cat /tmp/npm_install.log
         cd ..
         exit 1
     fi
+    echo " Done"
     
+    echo -e "${GREEN}✓ Frontend ready${NC}"
     cd ..
 fi
 
 # ============================================
 # Installation Complete
 # ============================================
-SERVER_IP=$(hostname -I | awk '{print $1}')
-[ -z "$SERVER_IP" ] && SERVER_IP=$(ip route get 1 | awk '{print $(NF-2);exit}')
+
+# Get the correct network IP (not NAT/loopback)
+get_network_ip() {
+    # Get all IPs excluding loopback
+    local all_ips=$(ip -4 addr show | grep "inet " | grep -v "127.0.0.1" | \
+                    awk '{print $2}' | cut -d/ -f1)
+    
+    # Get IPs excluding common NAT ranges
+    local good_ips=$(echo "$all_ips" | grep -v "^10\.0\.2\." | grep -v "^172\.17\." | grep -v "^169\.254\.")
+    
+    # Check if we have good IPs
+    if [ ! -z "$good_ips" ]; then
+        local ip_count=$(echo "$good_ips" | wc -l)
+        
+        # If only one good IP, use it
+        if [ $ip_count -eq 1 ]; then
+            echo "$good_ips"
+            return 0
+        fi
+        
+        # Multiple good IPs - use priority logic
+        # Priority 1: IP from default route interface
+        local default_iface=$(ip route | grep "^default" | awk '{print $5}' | head -n1)
+        if [ ! -z "$default_iface" ]; then
+            local default_ip=$(ip addr show "$default_iface" | grep "inet " | grep -v "127.0.0.1" | \
+                              awk '{print $2}' | cut -d/ -f1 | head -n1)
+            if [ ! -z "$default_ip" ] && [[ ! $default_ip =~ ^10\.0\.2\. ]]; then
+                echo "$default_ip"
+                return 0
+            fi
+        fi
+        
+        # Priority 2: Prefer 192.168.x.x or 10.x.x.x
+        for ip in $good_ips; do
+            if [[ $ip =~ ^192\.168\. ]] || [[ $ip =~ ^10\.[0-9]+\.[0-9]+\. ]]; then
+                echo "$ip"
+                return 0
+            fi
+        done
+        
+        # Use first good IP
+        echo "$good_ips" | head -n1
+        return 0
+    fi
+    
+    # No good IPs found, use NAT IP as fallback
+    if [ ! -z "$all_ips" ]; then
+        echo "$all_ips" | head -n1
+        return 1  # Return 1 to indicate NAT IP is being used
+    fi
+    
+    # Absolute fallback
+    echo "127.0.0.1"
+    return 2
+}
+
+SERVER_IP=$(get_network_ip)
+IP_STATUS=$?
+
+# Show all available IPs
+ALL_IPS=$(ip -4 addr show | grep "inet " | grep -v "127.0.0.1" | \
+          awk '{print $2}' | cut -d/ -f1)
+IP_COUNT=$(echo "$ALL_IPS" | wc -l)
 
 echo -e "\n${GREEN}✓ System successfully installed${NC}"
 echo ""
-echo -e "${BLUE}Access URL:${NC}"
-echo "  http://$SERVER_IP:$APP_PORT"
+
+# Check if using NAT IP (status = 1)
+if [ $IP_STATUS -eq 1 ]; then
+    echo -e "${BLUE}Access URL:${NC}"
+    echo "  http://$SERVER_IP:$APP_PORT"
+    echo ""
+    echo -e "${YELLOW}⚠ Network Notice:${NC}"
+    echo "  Using NAT IP - may not be accessible from other devices"
+    echo "  Fix: VirtualBox → Settings → Network → Bridged Adapter"
+    
+elif [ $IP_COUNT -gt 1 ]; then
+    echo -e "${BLUE}Access URL (multiple networks):${NC}"
+    while IFS= read -r ip; do
+        if [ "$ip" = "$SERVER_IP" ]; then
+            echo -e "  ${GREEN}➜ http://$ip:$APP_PORT${NC} (primary)"
+        else
+            echo -e "    http://$ip:$APP_PORT"
+        fi
+    done <<< "$ALL_IPS"
+else
+    echo -e "${BLUE}Access URL:${NC}"
+    echo "  http://$SERVER_IP:$APP_PORT"
+fi
 echo ""
