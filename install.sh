@@ -2,176 +2,317 @@
 
 set -e
 
-# ==============================
-# Terminal Colors
-# ==============================
+# Colors
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+RED='\033[0;31m'
 NC='\033[0m'
 
 echo -e "${BLUE}"
 echo "┌──────────────────────────────────────────────┐"
-echo "│     Backup Management System Installer       │"
+echo "│        System Installation Wizard           │"
 echo "└──────────────────────────────────────────────┘"
 echo -e "${NC}"
 
-# ==============================
-# Dependency Installer
-# ==============================
-install_dep() {
-    local bin=$1
-    local pkg=${2:-$1}
+# ============================================
+# Dependency Check & Install
+# ============================================
+echo -e "${BLUE}System Dependencies Check${NC}"
 
-    if ! command -v "$bin" &>/dev/null; then
-        echo -e "${YELLOW}Installing dependency: $pkg...${NC}"
+install_dep() {
+    if ! command -v $1 &>/dev/null; then
+        echo -e "${YELLOW}Installing $1...${NC}"
         sudo apt update -qq
-        sudo apt install -y "$pkg" -qq
-        echo -e "${GREEN}✓ $pkg installed${NC}"
+        sudo apt install -y $2 -qq
+        echo -e "${GREEN}✓ $1 installed${NC}"
     else
-        echo -e "${GREEN}✓ $bin already available${NC}"
+        echo -e "${GREEN}✓ $1 available${NC}"
     fi
 }
-
-# ==============================
-# Network Utilities
-# ==============================
-get_ip() {
-    hostname -I | awk '{print $1}'
-}
-
-find_available_port() {
-    local ports=(5173 3000 3001 8080)
-    for port in "${ports[@]}"; do
-        if ! lsof -Pi :"$port" -sTCP:LISTEN -t >/dev/null 2>&1; then
-            echo "$port"
-            return
-        fi
-    done
-    echo "5173"
-}
-
-# ==============================
-# Dependency Check
-# ==============================
-echo -e "${BLUE}Verifying system requirements...${NC}"
 
 install_dep "go" "golang-go"
 install_dep "node" "nodejs"
 install_dep "npm"
 install_dep "mysql" "default-mysql-client"
 
-# ==============================
-# Rclone Installation
-# ==============================
+# Rclone
 if ! command -v rclone &>/dev/null; then
     echo -e "${YELLOW}Installing rclone...${NC}"
     curl -fsSL https://rclone.org/install.sh | sudo bash > /dev/null
     echo -e "${GREEN}✓ rclone installed${NC}"
 else
-    echo -e "${GREEN}✓ rclone already available${NC}"
+    echo -e "${GREEN}✓ rclone available${NC}"
 fi
 
-# ==============================
+# ============================================
+# MySQL Setup
+# ============================================
+echo -e "\n${BLUE}Database Server Setup${NC}"
+
+check_mysql() {
+    # Check if MySQL is running
+    if systemctl is-active --quiet mysql 2>/dev/null || \
+       systemctl is-active --quiet mysqld 2>/dev/null; then
+        echo -e "${GREEN}✓ MySQL server running${NC}"
+        return 0
+    fi
+    
+    # Check if installed but not running
+    if dpkg -l | grep -q mysql-server || dpkg -l | grep -q mariadb-server; then
+        echo -e "${YELLOW}Starting MySQL service...${NC}"
+        sudo systemctl start mysql 2>/dev/null || sudo systemctl start mysqld
+        sleep 3
+        return 0
+    fi
+    
+    # MySQL not installed
+    return 1
+}
+
+mysql_newly_installed=0
+if check_mysql; then
+    echo -e "${GREEN}✓ MySQL ready${NC}"
+else
+    # Install MySQL with user-defined credentials
+    echo -e "${YELLOW}MySQL not found. Installing MySQL server...${NC}"
+    echo ""
+    echo -e "${BLUE}Configure MySQL Administrator Account${NC}"
+    echo -e "${YELLOW}Set username and password for MySQL${NC}"
+    
+    # Get username from user
+    read -p "MySQL username [root]: " MYSQL_NEW_USER
+    MYSQL_NEW_USER=${MYSQL_NEW_USER:-root}
+    
+    # Get password from user
+    while true; do
+        read -sp "MySQL password for '$MYSQL_NEW_USER': " MYSQL_NEW_PASS
+        echo ""
+        
+        if [ -z "$MYSQL_NEW_PASS" ]; then
+            echo -e "${RED}Password cannot be empty${NC}"
+            continue
+        fi
+        
+        if [ ${#MYSQL_NEW_PASS} -lt 6 ]; then
+            echo -e "${RED}Password must be at least 6 characters${NC}"
+            continue
+        fi
+        
+        read -sp "Confirm password: " MYSQL_NEW_PASS_CONFIRM
+        echo ""
+        
+        if [ "$MYSQL_NEW_PASS" != "$MYSQL_NEW_PASS_CONFIRM" ]; then
+            echo -e "${RED}Passwords do not match${NC}"
+        else
+            break
+        fi
+    done
+    
+    # Set debconf for non-interactive install
+    echo "mysql-server mysql-server/root_password password $MYSQL_NEW_PASS" | sudo debconf-set-selections
+    echo "mysql-server mysql-server/root_password_again password $MYSQL_NEW_PASS" | sudo debconf-set-selections
+    
+    echo ""
+    echo -e "${YELLOW}Installing MySQL server...${NC}"
+    sudo apt update -qq
+    sudo DEBIAN_FRONTEND=noninteractive apt install -y mysql-server -qq
+    
+    sudo systemctl start mysql
+    sudo systemctl enable mysql
+    
+    sleep 5
+    echo -e "${GREEN}✓ MySQL server installed${NC}"
+    
+    # If user chose non-root username, create that user
+    if [ "$MYSQL_NEW_USER" != "root" ]; then
+        echo -e "${YELLOW}Creating user '$MYSQL_NEW_USER'...${NC}"
+        mysql -u root -p"$MYSQL_NEW_PASS" -e "CREATE USER IF NOT EXISTS '$MYSQL_NEW_USER'@'localhost' IDENTIFIED BY '$MYSQL_NEW_PASS';" 2>/dev/null
+        mysql -u root -p"$MYSQL_NEW_PASS" -e "GRANT ALL PRIVILEGES ON *.* TO '$MYSQL_NEW_USER'@'localhost' WITH GRANT OPTION;" 2>/dev/null
+        mysql -u root -p"$MYSQL_NEW_PASS" -e "FLUSH PRIVILEGES;" 2>/dev/null
+        echo -e "${GREEN}✓ User '$MYSQL_NEW_USER' created${NC}"
+    fi
+    
+    DB_USER="$MYSQL_NEW_USER"
+    DB_PASS="$MYSQL_NEW_PASS"
+    mysql_newly_installed=1
+fi
+
+# ============================================
+# MySQL Authentication
+# ============================================
+echo -e "\n${BLUE}MySQL User Credentials${NC}"
+
+if [ $mysql_newly_installed -eq 1 ]; then
+    echo -e "${GREEN}Using newly created account: $DB_USER${NC}"
+else
+    echo -e "${YELLOW}Enter your existing MySQL credentials${NC}"
+    # Ask for existing MySQL credentials
+    attempts=0
+    max_attempts=3
+    
+    while [ $attempts -lt $max_attempts ]; do
+        echo ""
+        read -p "MySQL username [root]: " DB_USER
+        DB_USER=${DB_USER:-root}
+        
+        read -sp "MySQL password: " DB_PASS
+        echo ""
+        
+        if mysql -u "$DB_USER" -p"$DB_PASS" -e "SELECT 1;" 2>/dev/null; then
+            echo -e "${GREEN}✓ Authentication successful${NC}"
+            break
+        else
+            attempts=$((attempts + 1))
+            remaining=$((max_attempts - attempts))
+            if [ $remaining -gt 0 ]; then
+                echo -e "${RED}✗ Invalid credentials ($remaining attempts left)${NC}"
+            else
+                echo -e "${RED}✗ Maximum attempts reached${NC}"
+                exit 1
+            fi
+        fi
+    done
+fi
+
+echo -e "${GREEN}✓ Will use MySQL user: $DB_USER${NC}"
+
+# ============================================
 # Database Configuration
-# ==============================
-echo ""
-echo -e "${BLUE}Database Configuration${NC}"
-echo ""
+# ============================================
+echo -e "\n${BLUE}Database Configuration${NC}"
 
-read -p "Database user [root]: " db_user
-db_user=${db_user:-root}
+read -p "Database name [backup_system]: " DB_NAME
+DB_NAME=${DB_NAME:-backup_system}
 
-read -sp "Database password: " db_pass
-echo ""
+read -p "Database host [localhost]: " DB_HOST
+DB_HOST=${DB_HOST:-localhost}
 
-read -p "Database host [127.0.0.1]: " db_host
-db_host=${db_host:-127.0.0.1}
+read -p "Database port [3306]: " DB_PORT
+DB_PORT=${DB_PORT:-3306}
 
-read -p "Database port [3306]: " db_port
-db_port=${db_port:-3306}
+# ============================================
+# Create Database
+# ============================================
+echo -e "\n${BLUE}Setting up database...${NC}"
 
-read -p "Database name [gbackup_db]: " db_name
-db_name=${db_name:-gbackup_db}
+# Create database if not exists
+mysql -u "$DB_USER" -p"$DB_PASS" -e "CREATE DATABASE IF NOT EXISTS \`$DB_NAME\`;" 2>/dev/null
+echo -e "${GREEN}✓ Database '$DB_NAME' created${NC}"
 
-# ==============================
-# Storage Configuration
-# ==============================
-echo ""
-echo -e "${BLUE} Rclone Configuration${NC}"
-echo ""
+# Test connection
+if mysql -u "$DB_USER" -p"$DB_PASS" -D "$DB_NAME" -e "SELECT 1;" 2>/dev/null; then
+    echo -e "${GREEN}✓ Database connection test passed${NC}"
+else
+    echo -e "${RED}✗ Database connection failed${NC}"
+    exit 1
+fi
 
-read -p "Rclone config file path [~/.config/rclone/rclone.conf]: " rclone_path
-rclone_path=${rclone_path:-$HOME/.config/rclone/rclone.conf}
+# ============================================
+# Rclone Configuration
+# ============================================
+echo -e "\n${BLUE}Storage Configuration${NC}"
 
-# ==============================
-# Service Configuration
-# ==============================
-echo ""
-echo -e "${BLUE}Service Configuration${NC}"
-echo ""
+read -p "Rclone config path [~/.config/rclone/rclone.conf]: " RCLONE_PATH
+RCLONE_PATH=${RCLONE_PATH:-$HOME/.config/rclone/rclone.conf}
 
-APP_PORT=$(find_available_port)
-jwt_secret=$(openssl rand -base64 32)
+# ============================================
+# Service Port Configuration
+# ============================================
+echo -e "\n${BLUE}Service Configuration${NC}"
 
-echo -e "${GREEN}✓ Application port selected: ${APP_PORT}${NC}"
+# Find available port
+APP_PORT=""
+for port in 8080 3000 3001 5173; do
+    if ! lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1; then
+        APP_PORT=$port
+        break
+    fi
+done
 
-# ==============================
-# Environment Setup
-# ==============================
-echo ""
-echo -e "${BLUE}Generating system configuration...${NC}"
+if [ -z "$APP_PORT" ]; then
+    echo -e "${YELLOW}All default ports are in use${NC}"
+    read -p "Enter custom port: " APP_PORT
+fi
+
+# Generate JWT secret
+JWT_SECRET=$(openssl rand -base64 32)
+
+echo -e "${GREEN}✓ Service port: $APP_PORT${NC}"
+echo -e "${GREEN}✓ Security token generated${NC}"
+
+# ============================================
+# Create Environment File
+# ============================================
+echo -e "\n${BLUE}Creating configuration file...${NC}"
 
 cat > Backend/.env << EOF
-DB_USER=$db_user
-DB_PASS=$db_pass
-DB_HOST=$db_host
-DB_PORT=$db_port
-DB_NAME=$db_name
-JWT_SECRET_KEY=$jwt_secret
-RCLONE_CONFIG=$rclone_path
+# Database Configuration
+DB_USER=$DB_USER
+DB_PASS=$DB_PASS
+DB_HOST=$DB_HOST
+DB_PORT=$DB_PORT
+DB_NAME=$DB_NAME
+
+# Security
+JWT_SECRET_KEY=$JWT_SECRET
+
+# Storage
+RCLONE_CONFIG=$RCLONE_PATH
+
+# Network
 SERVER_HOST=0.0.0.0
 APP_PORT=$APP_PORT
 EOF
 
-echo -e "${GREEN}✓ Configuration created${NC}"
+echo -e "${GREEN}✓ Configuration file created${NC}"
 
-# ==============================
-# Build Core Service
-# ==============================
-echo -e "${BLUE}Compiling application service...${NC}"
+# ============================================
+# Build Backend Application
+# ============================================
+echo -e "\n${BLUE}Building application...${NC}"
+
 cd Backend
 go mod download
 go build -o app ./cmd/backend_app
 cd ..
+
 echo -e "${GREEN}✓ Application compiled${NC}"
 
-# ==============================
-# Install Web Interface
-# ==============================
+# ============================================
+# Install Frontend (if exists)
+# ============================================
 if [ -d "Frontend" ] && [ -f "Frontend/package.json" ]; then
-    echo -e "${BLUE}Preparing web interface...${NC}"
+    echo -e "\n${BLUE}Preparing web interface...${NC}"
     cd Frontend
     npm install --silent
     cd ..
     echo -e "${GREEN}✓ Web interface ready${NC}"
 fi
 
-# ==============================
-# Completion Summary
-# ==============================
-SERVER_IP=$(get_ip)
+# ============================================
+# Installation Complete
+# ============================================
+SERVER_IP=$(hostname -I | awk '{print $1}')
 
-echo ""
-echo -e "${BLUE}┌──────────────────────────────────────────────┐"
-echo -e "│          Installation Completed              │"
+echo -e "\n${BLUE}┌──────────────────────────────────────────────┐"
+echo -e "│           Installation Complete             │"
 echo -e "└──────────────────────────────────────────────┘${NC}"
 echo ""
-echo -e "${GREEN}System successfully installed.${NC}"
+echo -e "${GREEN}✓ System successfully installed${NC}"
 echo ""
-echo -e "${YELLOW}Access URL:${NC}"
-echo -e "  http://${SERVER_IP}:${APP_PORT}"
+echo -e "${YELLOW}Configuration Summary${NC}"
+echo "  Database: $DB_NAME"
+echo "  MySQL User: $DB_USER"
+echo "  Server: $SERVER_IP:$APP_PORT"
 echo ""
-echo -e "${BLUE}To start the system:${NC}"
+echo -e "${YELLOW}Access URL${NC}"
+echo "  http://$SERVER_IP:$APP_PORT"
+echo ""
+echo -e "${YELLOW}MySQL Access${NC}"
+echo "  To access your MySQL database:"
+echo "  mysql -u $DB_USER -p"
+echo ""
+echo -e "${BLUE}Start the system with:${NC}"
 echo "  ./start.sh"
 echo ""
